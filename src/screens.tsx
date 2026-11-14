@@ -33,6 +33,9 @@ import { ReadCache } from "./readPolicy";
 import { release } from "./release";
 import { ProjectArtwork } from "./ProjectArtwork";
 import { SalesChart } from "./SalesChart";
+import { BottomNavigation } from "./BottomNavigation";
+import { AppHeader } from "./AppHeader";
+import { AppearanceSettings } from "./AppearanceSettings";
 import {
   averagePublicPrice,
   compact,
@@ -1389,54 +1392,7 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
           </>
         )}
       </Page>
-      <SafeAreaView
-        edges={["bottom"]}
-        style={{
-          backgroundColor: "#222222",
-          paddingHorizontal: 12,
-          paddingTop: 8,
-        }}
-      >
-        <View style={{ flexDirection: "row", paddingBottom: 8 }}>
-          {(
-            [
-              { name: "Accueil", icon: "grid-outline" },
-              { name: "Projets", icon: "albums-outline" },
-              { name: "Dates", icon: "calendar-outline" },
-              { name: "Analyses", icon: "stats-chart-outline" },
-            ] as const
-          ).map((t) => (
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected: tab === t.name }}
-              key={t.name}
-              onPress={() => setTab(t.name)}
-              style={{
-                flex: 1,
-                alignItems: "center",
-                paddingVertical: 9,
-                gap: 5,
-              }}
-            >
-              <Icon
-                name={t.icon}
-                size={22}
-                color={tab === t.name ? "#FFEE57" : "#C9CED6"}
-              />
-              <Txt
-                style={{
-                  color: tab === t.name ? "#FFEE57" : "#C9CED6",
-                  fontSize: 11,
-                  lineHeight: 15,
-                  fontWeight: "600",
-                }}
-              >
-                {t.name}
-              </Txt>
-            </Pressable>
-          ))}
-        </View>
-      </SafeAreaView>
+      <BottomNavigation active={tab} onChange={setTab} />
       <FilterSheet
         key={String(filter)}
         visible={filter}
@@ -1500,68 +1456,13 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
   return (
     <SafeAreaView
       edges={["top", "left", "right"]}
-      style={{ flex: 1, backgroundColor: "#FFEE57" }}
+      style={{ flex: 1, backgroundColor: c.bg }}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: 20,
-          paddingVertical: 11,
-          gap: 10,
-        }}
-      >
-        <Image
-          accessibilityLabel="Logo Bordero"
-          source={require("../assets/logo.png")}
-          resizeMode="contain"
-          style={{ width: 29, height: 31 }}
-        />
-        <Txt
-          style={{
-            fontSize: 22,
-            fontWeight: "700",
-            color: "#171B22",
-            letterSpacing: -0.6,
-          }}
-        >
-          Bordero
-        </Txt>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Changer d’espace de travail"
-          onPress={() => setPicker(true)}
-          style={{
-            flex: 1,
-            padding: 8,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            justifyContent: "flex-end",
-          }}
-        >
-          <Txt
-            numberOfLines={1}
-            style={{
-              fontSize: 12,
-              fontWeight: "600",
-              color: "#171B22",
-              maxWidth: 160,
-            }}
-          >
-            {workspace?.name ?? "Espace de travail"}
-          </Txt>
-          <Icon name="chevron-down" size={15} color="#171B22" />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Mon compte"
-          onPress={() => setAccount(true)}
-          style={{ padding: 8 }}
-        >
-          <Icon name="person-circle-outline" size={27} color="#171B22" />
-        </Pressable>
-      </View>
+      <AppHeader
+        workspaceName={workspace?.name}
+        onWorkspace={() => setPicker(true)}
+        onProfile={() => setAccount(true)}
+      />
       <View style={{ flex: 1, backgroundColor: c.bg }}>
         {(!workspaces.data && workspaces.loading) ||
         (!cat.data && cat.loading) ||
@@ -1679,7 +1580,34 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
         close={() => setAccount(false)}
         title="Mon compte"
       >
-        <Txt>{userEmail}</Txt>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            paddingBottom: 8,
+          }}
+        >
+          <View
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 16,
+              backgroundColor: c.accent,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon name="person-outline" color="#171B22" size={23} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+            <Txt style={{ fontWeight: "700" }}>Ton compte Bordero</Txt>
+            <Txt muted style={{ fontSize: 12, lineHeight: 18 }} selectable>
+              {userEmail}
+            </Txt>
+          </View>
+        </View>
+        <AppearanceSettings />
         <Notice>
           Bordero {release.displayVersion} · Build {release.build} ·
           consultation des ventes et recettes.

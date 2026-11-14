@@ -48,7 +48,8 @@ Le build Android Release local utilise la signature de test du projet généré.
 - Résumés de bordereaux, avec « dont Communication » et plateau seulement si autorisé.
 - Affiches des projets, prix moyen public pondéré, raccourci « À venir » et indication d’actualisation.
 - Reprises des erreurs temporaires, lectures groupées et cache limité à la mémoire du compte/espace courant.
-- Logo fourni conservé dans `assets/logo.png`, modes clair/sombre, prise en charge des grandes polices.
+- Logo original dans un carré jaune arrondi, profil jaune et navigation flottante sur fond neutre.
+- Choix Jour / Nuit / Automatique dans le profil, mémorisé localement, avec prise en charge des grandes polices.
 
 Aucun module Roadbook, équipe, budget ou campagne événementielle dédiée. Les données de production ne sont jamais remplacées par des données de démonstration.
 
@@ -84,3 +85,5 @@ Voir `docs/RELEASE_TEST.md` pour les vérifications réellement effectuées et l
 Les améliorations et leur parcours de vérification sont décrits dans `docs/EVOLUTIONS_1_0.md`.
 
 Voir `docs/EVOLUTIONS_ANALYTICS.md` pour la mise à jour des graphiques et des chargements.
+
+Voir `docs/EVOLUTIONS_APPARENCE.md` pour l’en-tête flottant et le choix du thème.

@@ -9,13 +9,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Session } from "@supabase/supabase-js";
 import { configured, supabase } from "./src/client";
 import {
   ThemeProvider,
+  useTheme,
+  AppLoading,
   Txt,
   Card,
   Button,
@@ -26,12 +27,13 @@ import {
 } from "./src/ui";
 import { Dashboard } from "./src/screens";
 function Auth() {
+  const c = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFEE57" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -50,24 +52,35 @@ function Auth() {
           ]}
         >
           <View style={{ alignItems: "flex-start", gap: 12 }}>
-            <Image
-              source={require("./assets/logo.png")}
-              resizeMode="contain"
-              style={{ width: 67, height: 72 }}
-              accessibilityLabel="Logo Bordero"
-            />
+            <View
+              style={{
+                width: 76,
+                height: 76,
+                borderRadius: 24,
+                backgroundColor: c.accent,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Image
+                source={require("./assets/logo.png")}
+                resizeMode="contain"
+                style={{ width: 43, height: 46 }}
+                accessibilityLabel="Logo Bordero"
+              />
+            </View>
             <Txt
               style={{
                 fontSize: 43,
                 lineHeight: 51,
                 fontWeight: "700",
-                color: "#171B22",
+                color: c.text,
                 letterSpacing: -1.5,
               }}
             >
               Bordero
             </Txt>
-            <Txt style={{ fontSize: 18, lineHeight: 26, color: "#464315" }}>
+            <Txt style={{ fontSize: 18, lineHeight: 26, color: c.muted }}>
               Tes ventes. Tes recettes.{"\n"}Une vue claire, où que tu sois.
             </Txt>
           </View>
@@ -92,7 +105,7 @@ function Auth() {
               textContentType="password"
             />
             {error && (
-              <Txt accessibilityRole="alert" style={{ color: "#BB3838" }}>
+              <Txt accessibilityRole="alert" style={{ color: c.danger }}>
                 {error}
               </Txt>
             )}
@@ -130,7 +143,7 @@ function Auth() {
               secondary
             />
           </Card>
-          <Txt style={{ textAlign: "center", fontSize: 11, color: "#464315" }}>
+          <Txt style={{ textAlign: "center", fontSize: 11, color: c.muted }}>
             TABLEAU DE BORD · ANDROID & iOS
           </Txt>
         </ScrollView>
@@ -172,17 +185,8 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <StatusBar style="dark" />
         {session === undefined || (!fonts && !error) ? (
-          <SafeAreaView
-            style={{
-              flex: 1,
-              backgroundColor: "#FFEE57",
-              justifyContent: "center",
-            }}
-          >
-            <Loading />
-          </SafeAreaView>
+          <AppLoading />
         ) : session ? (
           <Dashboard
             key={session.user.id}

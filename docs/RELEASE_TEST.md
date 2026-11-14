@@ -4,7 +4,7 @@ Application distincte de Roadbook, nom affiché Bordero, identifiant `io.bordero
 
 ## Vérifications
 
-- TypeScript et 46 tests automatisés réussis : formats exacts/compacts, filtres, calculs issus du Web, part producteur des DL, recette nette avant commission promoteur, communication et protection du plateau.
+- TypeScript et 50 tests automatisés réussis : formats exacts/compacts, filtres, calculs issus du Web, part producteur des DL, recette nette avant commission promoteur, communication et protection du plateau.
 - Fonction serveur mobile-dashboard version 3 déployée sur autorisation explicite ; authentification JWT requise.
 - Vérifications distantes : requêtes sans session et avec session invalide refusées (401), clé publique seule sans utilisateur refusée (403).
 - Build iOS Release compilé et lancé sur simulateur iPhone iOS 27.2 ; écran de connexion vérifié visuellement, sans serveur Metro. Adaptation du cycle de vie des scènes iOS 27 reprise de la configuration mobile existante.
@@ -28,3 +28,5 @@ Les montants de coûts reprennent les agrégats historiques du bordereau Web san
 Ce build sert à la recette ; il ne constitue pas une publication App Store ou Play Store.
 
 La mise à jour graphique et les optimisations de lecture sont décrites dans `EVOLUTIONS_ANALYTICS.md`. Le contrôle natif du graphique a utilisé un aperçu distinct avec des données synthétiques, absent du build livré. Une lecture sans connexion du service version 3 est toujours refusée (401).
+
+En-tête flottant et préférence Jour / Nuit / Automatique : rendu natif Jour et Nuit vérifié dans un aperçu de test distinct ; restauration et ordre des écritures couverts par les tests. Voir `EVOLUTIONS_APPARENCE.md`. La recette dans le profil du compte connecté reste à effectuer sur le téléphone.

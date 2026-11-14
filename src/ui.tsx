@@ -1,6 +1,13 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   AccessibilityInfo,
+  Appearance,
   ActivityIndicator,
   LayoutAnimation,
   Platform,
@@ -14,14 +21,18 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import * as SystemUI from "expo-system-ui";
+import { StatusBar } from "expo-status-bar";
+import {
+  AppearanceStore,
+  APPEARANCE_KEY,
+  resolvedAppearance,
+  type AppearanceMode,
+} from "./appearance";
 import { kpiColumns, sectionPalette } from "./layout";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import {
-  compact,
-  exact,
-  dayLabel,
-  errorMessage,
-} from "./domain";
+import { compact, exact, dayLabel, errorMessage } from "./domain";
 const light = {
   bg: "#F6F7F8",
   surface: "#FFFFFF",
@@ -46,12 +57,84 @@ const dark = {
 };
 export const Theme = createContext(light);
 export const useTheme = () => useContext(Theme);
+const appearanceStore = new AppearanceStore({
+  read: () => SecureStore.getItemAsync(APPEARANCE_KEY),
+  write: (mode) => SecureStore.setItemAsync(APPEARANCE_KEY, mode),
+});
+const AppearanceContext = createContext({
+  mode: "system" as AppearanceMode,
+  setMode: (_mode: AppearanceMode) => {},
+  saving: false,
+  error: false,
+});
+export const useAppearance = () => useContext(AppearanceContext);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const scheme = useColorScheme();
+  const system = useColorScheme();
+  const [mode, setPreference] = useState<AppearanceMode>("system");
+  const [ready, setReady] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+  const version = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    let active = true;
+    mounted.current = true;
+    appearanceStore
+      .load()
+      .then((value) => {
+        if (active) setPreference(value);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setReady(true);
+      });
+    return () => {
+      active = false;
+      mounted.current = false;
+    };
+  }, []);
+  const resolved = resolvedAppearance(mode, system);
+  const colors = resolved === "dark" ? dark : light;
+  useEffect(() => {
+    if (!ready) return;
+    Appearance.setColorScheme(mode === "system" ? "unspecified" : mode);
+  }, [ready, mode]);
+  useEffect(() => {
+    if (ready) void SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
+  }, [ready, colors.bg]);
+  function setMode(next: AppearanceMode) {
+    const revision = ++version.current;
+    setPreference(next);
+    setSaving(true);
+    setError(false);
+    appearanceStore.save(next).then(
+      () => {
+        if (mounted.current && revision === version.current) setSaving(false);
+      },
+      () => {
+        if (mounted.current && revision === version.current) {
+          setSaving(false);
+          setError(true);
+        }
+      },
+    );
+  }
+  if (!ready) return null;
   return (
-    <Theme.Provider value={scheme === "dark" ? dark : light}>
-      {children}
-    </Theme.Provider>
+    <AppearanceContext.Provider value={{ mode, setMode, saving, error }}>
+      <Theme.Provider value={colors}>
+        <StatusBar style={resolved === "dark" ? "light" : "dark"} />
+        {children}
+      </Theme.Provider>
+    </AppearanceContext.Provider>
+  );
+}
+export function AppLoading() {
+  const c = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg, justifyContent: "center" }}>
+      <Loading />
+    </View>
   );
 }
 export function Txt({
