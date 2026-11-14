@@ -16,3 +16,7 @@ TypeScript et 50 tests automatisés réussis, dont quatre vérifications de la p
 La recette sur appareil reste à faire : ouvrir le profil, passer de Jour à Nuit puis Automatique, fermer et rouvrir l’application, vérifier une grande police et tourner le téléphone. Vérifier aussi un changement d’espace et le retour depuis une date.
 
 Aucune modification des calculs, des données, des droits ou du service serveur. Version conservée : 1.0.0, Build 1.
+
+## Menu inférieur en superposition
+
+La capsule est désormais positionnée au-dessus du contenu, dans un conteneur transparent sans bande de fond. Les zones autour de la capsule laissent passer les interactions vers la page. La hauteur réelle du menu et la zone du geste système déterminent l’espace de fin de défilement, pour garder le dernier élément entièrement accessible. Cette modification mobile nécessite l’installation de la nouvelle Release.

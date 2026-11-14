@@ -1137,14 +1137,24 @@ function DeferredSection({
     </View>
   );
 }
-function Page({ children }: { children: React.ReactNode }) {
+function Page({
+  children,
+  bottomSpace = 0,
+}: {
+  children: React.ReactNode;
+  bottomSpace?: number;
+}) {
   const ctx = useDashboard();
   const c = useTheme();
   const [bottom, setBottom] = useState(0);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={pageStyle}
+      contentContainerStyle={[
+        pageStyle,
+        { paddingBottom: Math.max(35, bottomSpace + 20) },
+      ]}
+      scrollIndicatorInsets={{ bottom: bottomSpace }}
       onLayout={(event) => setBottom(event.nativeEvent.layout.height + 180)}
       onScroll={(event) =>
         setBottom(
@@ -1302,6 +1312,7 @@ function WorkspaceEvolution() {
 }
 function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
   const ctx = useDashboard();
+  const [menuHeight, setMenuHeight] = useState(120);
   const [tab, setTab] = useState("Accueil");
   const [filter, setFilter] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
@@ -1315,7 +1326,7 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Page>
+      <Page bottomSpace={menuHeight}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Heading
@@ -1465,7 +1476,11 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
           </>
         )}
       </Page>
-      <BottomNavigation active={tab} onChange={setTab} />
+      <BottomNavigation
+        active={tab}
+        onChange={setTab}
+        onHeightChange={setMenuHeight}
+      />
       <FilterSheet
         key={String(filter)}
         visible={filter}

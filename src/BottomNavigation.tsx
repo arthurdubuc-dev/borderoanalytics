@@ -1,21 +1,31 @@
 import React from "react";
 import { View, Pressable } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, Icon, Txt } from "./ui";
 export type MainTab = "Accueil" | "Projets" | "Dates" | "Analyses";
 export function BottomNavigation({
   active,
   onChange,
+  onHeightChange,
 }: {
   active: string;
   onChange: (tab: MainTab) => void;
+  onHeightChange?: (height: number) => void;
 }) {
   const c = useTheme();
+  const insets = useSafeAreaInsets();
   return (
-    <SafeAreaView
-      edges={["bottom"]}
+    <View
+      pointerEvents="box-none"
+      onLayout={(event) => onHeightChange?.(event.nativeEvent.layout.height)}
       style={{
-        backgroundColor: c.bg,
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 20,
+        backgroundColor: "transparent",
+        paddingBottom: Math.max(insets.bottom, 12),
         paddingHorizontal: 20,
         paddingTop: 8,
       }}
@@ -79,6 +89,6 @@ export function BottomNavigation({
           </Pressable>
         ))}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
