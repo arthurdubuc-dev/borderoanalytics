@@ -89,11 +89,19 @@ function store(
       signal,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    if (!r.ok)
+    if (!r.ok) {
+      console.error(
+        JSON.stringify({
+          code: "MOBILE_SOURCE_FAILURE",
+          source: path.split("?")[0],
+          status: r.status,
+        }),
+      );
       throw new SafeError(
         r.status === 401 ? 401 : r.status === 403 ? 403 : 503,
         "SOURCE_UNAVAILABLE",
       );
+    }
     return r.json();
   }
   async function table(
@@ -117,14 +125,24 @@ function store(
       if (offset >= 50000) throw new SafeError(422, "SCOPE_TOO_LARGE");
     }
   }
-  async function forDates(name: string, ids: string[], select: string) {
+  async function forDates(
+    name: string,
+    ids: string[],
+    select: string,
+    order = "id.asc",
+    batchSize = 30,
+  ) {
     const out: Row[] = [];
-    for (let i = 0; i < ids.length; i += 30)
+    for (let i = 0; i < ids.length; i += batchSize)
       out.push(
-        ...(await table(name, {
-          select,
-          event_date_id: "in.(" + ids.slice(i, i + 30).join(",") + ")",
-        })),
+        ...(await table(
+          name,
+          {
+            select,
+            event_date_id: "in.(" + ids.slice(i, i + batchSize).join(",") + ")",
+          },
+          order,
+        )),
       );
     return out;
   }
@@ -422,7 +440,7 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
       )
         throw new SafeError(400, "INVALID_ACTION");
       const scope = validateScope(body.scope);
-      const includeSections = Boolean(scope.eventId);
+      const includeSections = Boolean(scope.eventId) && body.sections !== false;
       const db = store(env, authorization, request.signal, fetcher);
       const user = await db.call("/auth/v1/user");
       if (!UUID.test(user.id ?? "")) throw new SafeError(401, "UNAUTHORIZED");
@@ -452,10 +470,17 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
           (!scope.to || d.date <= scope.to),
       );
       if (selected.length > 500) throw new SafeError(422, "SCOPE_TOO_LARGE");
-      const capabilities = await parallelMap(dates, 6, (d) =>
+      const capabilityDates = includeSections
+        ? dates.filter((d) =>
+            selected.some((s) => s.project_id === d.project_id),
+          )
+        : selected;
+      const capabilities = await parallelMap(capabilityDates, 6, (d) =>
         db.rpc("get_date_capabilities", { _event_date_id: d.id }),
       );
-      const caps = new Map(dates.map((d, i) => [d.id, capabilities[i]]));
+      const caps = new Map(
+        capabilityDates.map((d, i) => [d.id, capabilities[i]]),
+      );
       const authorized = selected.filter(
         (d) => caps.get(d.id)?.canViewBordereau === true,
       );
@@ -470,6 +495,7 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
         sources,
         workspaces,
         billing,
+        economic,
       ] = await Promise.all([
         db.forDates(
           "sales",
@@ -481,42 +507,53 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
           ids,
           "id,event_date_id,tariff_name,price_ht,dl_producer,dl_venue,dl_distribution",
         ),
-        includeSections ? db.forDates(
-          "bordereau_cost_items", ids,
-          "event_date_id,group_code,cell_code,total,quantity",
-        ) : Promise.resolve([]),
+        includeSections
+          ? db.forDates(
+              "bordereau_cost_items",
+              ids,
+              "event_date_id,group_code,cell_code,total,quantity",
+            )
+          : Promise.resolve([]),
         db.forDates(
           "bordereau_taxes",
           ids,
           "event_date_id,code,label,mode,value,apply_to",
         ),
-        includeSections ? db.forDates("communication_actions", ids, "event_date_id,total_cost") : Promise.resolve([]),
-        db.table(
+        includeSections
+          ? db.forDates(
+              "communication_actions",
+              ids,
+              "event_date_id,total_cost",
+            )
+          : Promise.resolve([]),
+        db.forDates(
           "v_event_date_sales_current_canonical",
-          {
-            workspace_id: "eq." + scope.workspaceId,
-            select: "event_date_id,source_type,gross_revenue",
-          },
+          ids,
+          "event_date_id,source_type,gross_revenue",
           "event_date_id.asc",
+          100,
         ),
-        db.table("workspaces", {
-          id: "eq." + scope.workspaceId,
-          select: "id,organization_id",
-        }),
-        includeSections ? db
-          .call("/functions/v1/workspace-billing-context", {
-            workspaceId: scope.workspaceId,
-          })
-          .catch(() => ({ entitlements: {} })) : Promise.resolve({entitlements:{}}),
+        includeSections
+          ? db.table("workspaces", {
+              id: "eq." + scope.workspaceId,
+              select: "id,organization_id",
+            })
+          : Promise.resolve([]),
+        includeSections
+          ? db
+              .call("/functions/v1/workspace-billing-context", {
+                workspaceId: scope.workspaceId,
+              })
+              .catch(() => ({ entitlements: {} }))
+          : Promise.resolve({ entitlements: {} }),
+        db.forDates(
+          "v_event_date_sales_economic_current",
+          ids,
+          "event_date_id,inherited_tickets,continuity_pending",
+          "event_date_id.asc",
+          100,
+        ),
       ]);
-      const economic = await db.table(
-        "v_event_date_sales_economic_current",
-        {
-          workspace_id: "eq." + scope.workspaceId,
-          select: "event_date_id,inherited_tickets,continuity_pending",
-        },
-        "event_date_id.asc",
-      );
       const entitlements = billing.entitlements ?? {},
         workspace = workspaces[0] ?? {};
       const plateau = new Map<
@@ -525,16 +562,18 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
       >();
       for (const project of projects) {
         const pd = dates.filter((d) => d.project_id === project.id);
-        const can = includeSections && authorized.some(
-          (d) =>
-            d.project_id === project.id &&
-            canReadPlateau(
-              caps.get(d.id) ?? {},
-              project,
-              workspace,
-              entitlements,
-            ),
-        );
+        const can =
+          includeSections &&
+          authorized.some(
+            (d) =>
+              d.project_id === project.id &&
+              canReadPlateau(
+                caps.get(d.id) ?? {},
+                project,
+                workspace,
+                entitlements,
+              ),
+          );
         if (!can) continue;
         if (!pd.every((d) => caps.get(d.id)?.canViewBordereau === true)) {
           plateau.set(project.id, {
@@ -556,16 +595,18 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
           });
         }
       }
-      const eIds = includeSections ? authorized
-        .filter((d) =>
-          canReadPlateau(
-            caps.get(d.id) ?? {},
-            projects.find((p) => p.id === d.project_id)!,
-            workspace,
-            entitlements,
-          ),
-        )
-        .map((d) => d.id) : [];
+      const eIds = includeSections
+        ? authorized
+            .filter((d) =>
+              canReadPlateau(
+                caps.get(d.id) ?? {},
+                projects.find((p) => p.id === d.project_id)!,
+                workspace,
+                entitlements,
+              ),
+            )
+            .map((d) => d.id)
+        : [];
       const digital = eIds.length
         ? await db.forDates(
             "digital_campaigns",
@@ -576,12 +617,14 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
       const result = authorized.map((d) => {
         const project = projects.find((p) => p.id === d.project_id)!;
         const own = (r: Row) => r.event_date_id === d.id;
-        const canPlateau = includeSections && canReadPlateau(
-          caps.get(d.id) ?? {},
-          project,
-          workspace,
-          entitlements,
-        );
+        const canPlateau =
+          includeSections &&
+          canReadPlateau(
+            caps.get(d.id) ?? {},
+            project,
+            workspace,
+            entitlements,
+          );
         const pool = plateau.get(d.project_id);
         const amount = canPlateau ? pool?.get(d) : null;
         const summary = buildPublicFinance({

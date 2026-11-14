@@ -1,4 +1,5 @@
 import { abortError, ReadError } from "./readPolicy";
+import { ReadQueue } from "./readQueue";
 interface SessionIdentity {
   access_token: string;
   user: { id: string };
@@ -15,6 +16,7 @@ interface Options {
 }
 export function createReadTransport(options: Options) {
   const fetcher = options.fetcher ?? fetch;
+  const expensive = new ReadQueue(2);
   let refreshing: Promise<SessionIdentity | null> | undefined;
   function refresh() {
     if (!refreshing) {
@@ -130,7 +132,9 @@ export function createReadTransport(options: Options) {
   }
   return {
     request: <T>(path: string, signal: AbortSignal, body?: unknown) =>
-      read<T>(path, signal, body),
+      /mobile-dashboard|get_project_sales_|v_event_date_sales_/.test(path)
+        ? expensive.run(signal, () => read<T>(path, signal, body))
+        : read<T>(path, signal, body),
     image: (path: string, signal: AbortSignal) =>
       read<{ bytes: ArrayBuffer; type: string }>(path, signal, undefined, true),
   };

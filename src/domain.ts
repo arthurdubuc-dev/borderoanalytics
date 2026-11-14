@@ -156,6 +156,8 @@ export interface Breakdown {
   notes: string[];
 }
 export interface TimelinePoint {
+  dailyTickets?: number | null;
+  dailyGross?: number | null;
   day: string;
   tickets: number | null;
   gross: number | null;

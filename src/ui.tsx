@@ -21,7 +21,6 @@ import {
   exact,
   dayLabel,
   errorMessage,
-  type TimelinePoint,
 } from "./domain";
 const light = {
   bg: "#F6F7F8",
@@ -595,101 +594,6 @@ export function RowButton({
       )}
       <Icon name="chevron-forward" size={17} color={c.muted} />
     </Pressable>
-  );
-}
-export function TrendChart({
-  points,
-  money = false,
-}: {
-  points: TimelinePoint[];
-  money?: boolean;
-}) {
-  const c = useTheme();
-  const [selected, setSelected] = useState<string | null>(null);
-  const sampled =
-    points.length > 48
-      ? points.filter(
-          (_, i) =>
-            i % Math.ceil(points.length / 48) === 0 || i === points.length - 1,
-        )
-      : points;
-  const values = sampled.map((p) => (money ? p.gross : p.tickets));
-  const valid = values.filter((v): v is number => v !== null);
-  if (!valid.length)
-    return (
-      <Notice>Pas encore d’historique comparable pour cette mesure.</Notice>
-    );
-  const max = Math.max(...valid.map(Math.abs), 1);
-  const pick = points.find((p) => p.day === selected) ?? points.at(-1);
-  return (
-    <View style={{ gap: 15 }}>
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          gap: 10,
-        }}
-      >
-        <Txt muted style={{ fontSize: 12 }}>
-          {pick ? dayLabel(pick.day, true) : ""}
-        </Txt>
-        <Txt style={{ fontWeight: "700", fontSize: 18 }}>
-          {exact(pick ? (money ? pick.gross : pick.tickets) : null, money)}
-        </Txt>
-      </View>
-      <View
-        accessibilityLabel="Évolution cumulée. Appuie sur une barre pour lire sa valeur."
-        style={{
-          height: 135,
-          flexDirection: "row",
-          gap: 3,
-          alignItems: "flex-end",
-        }}
-      >
-        {sampled.map((p, i) => {
-          const value = values[i];
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${dayLabel(p.day)} : ${exact(value ?? null, money)}`}
-              key={p.day}
-              onPress={() => setSelected(p.day)}
-              style={{ flex: 1, height: 135, justifyContent: "flex-end" }}
-            >
-              <View
-                style={{
-                  height:
-                    value == null
-                      ? 2
-                      : Math.max(3, (Math.abs(value) / max) * 135),
-                  backgroundColor:
-                    value === null
-                      ? c.line
-                      : p.day === selected
-                        ? c.text
-                        : c.accent,
-                  borderRadius: 4,
-                  opacity: value === null ? 0.3 : 1,
-                }}
-              />
-            </Pressable>
-          );
-        })}
-      </View>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Txt muted style={{ fontSize: 11 }}>
-          {dayLabel(sampled[0]!.day, true)}
-        </Txt>
-        <Txt muted style={{ fontSize: 11 }}>
-          {dayLabel(sampled.at(-1)!.day, true)}
-        </Txt>
-      </View>
-      <Txt muted style={{ fontSize: 11, lineHeight: 17 }}>
-        Cumuls observés · les remontées peuvent couvrir plusieurs jours. Les
-        absences de données ne valent pas zéro.
-      </Txt>
-    </View>
   );
 }
 export const pageStyle: ViewStyle = {

@@ -32,6 +32,7 @@ import { useResource, ReadContext } from "./useResource";
 import { ReadCache } from "./readPolicy";
 import { release } from "./release";
 import { ProjectArtwork } from "./ProjectArtwork";
+import { SalesChart } from "./SalesChart";
 import {
   averagePublicPrice,
   compact,
@@ -68,7 +69,6 @@ import {
   ProjectCard,
   UpdatedNote,
   RowButton,
-  TrendChart,
   pageStyle,
 } from "./ui";
 type Routes = {
@@ -335,6 +335,18 @@ function Summary({
           details="Les dates annulées, reportées, options et cessions restent exclues des indicateurs commerciaux."
         />
       </KpiGrid>
+      {(ctx.mode === "producerDl" || ctx.mode === "net") &&
+        missing > 0 &&
+        !finance.loading &&
+        finance.data && (
+          <Notice warning>
+            {known.length === 0
+              ? "Aucune date ne fournit actuellement une recette détaillée réconciliée dans ce périmètre."
+              : `${known.length}/${valid.length} dates sont incluses : le montant est un sous-total.`}{" "}
+            {finance.data.flatMap((d) => d.warnings ?? [])[0] ??
+              "Les autres dates ne disposent pas des sources ou des droits requis. Ouvre une date pour consulter son état."}
+          </Notice>
+        )}
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
         <Txt muted style={{ fontSize: 12 }}>
           {valid.length} dates billetterie · {selected.length - valid.length}{" "}
@@ -370,31 +382,17 @@ function Summary({
   );
 }
 function Evolution({ scope }: { scope: Scope }) {
-  const { mode } = useDashboard();
-  const [period, setPeriod] = useState(30);
   const timeline = useResource(
     scope.projectId && !scope.from && !scope.to && scope.tourId !== null
       ? "timeline:" + JSON.stringify(scope)
       : null,
     (s) => api.timeline(scope, s),
   );
-  const c = useTheme();
-  const available = mode === "gross";
-  let points = timeline.data?.points ?? [];
-  if (period && points.length) {
-    const end = new Date(points.at(-1)!.day + "T12:00:00Z");
-    end.setUTCDate(end.getUTCDate() - period + 1);
-    points = points.filter((p) => p.day >= end.toISOString().slice(0, 10));
-  }
   return (
     <Card>
       <Heading
-        title="Évolution des ventes"
-        subtitle={
-          available
-            ? "Recette publique TTC · cumul observé"
-            : "Billets · cumul observé"
-        }
+        title="Le rythme des ventes"
+        subtitle="Histogramme quotidien et courbe de cumul · données observées"
       />
       {!scope.projectId ? (
         <Notice>
@@ -407,31 +405,6 @@ function Evolution({ scope }: { scope: Scope }) {
         </Notice>
       ) : (
         <>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            {[7, 30, 0].map((p) => (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: p === period }}
-                key={p}
-                onPress={() => setPeriod(p)}
-                style={{
-                  paddingVertical: 8,
-                  paddingHorizontal: 16,
-                  borderRadius: 20,
-                  backgroundColor: p === period ? c.accent : c.secondary,
-                }}
-              >
-                <Txt
-                  style={{
-                    color: p === period ? "#171B22" : c.text,
-                    fontSize: 13,
-                  }}
-                >
-                  {p ? p + " jours" : "Tout"}
-                </Txt>
-              </Pressable>
-            ))}
-          </View>
           {timeline.data && !!timeline.error && (
             <UpdatedNote
               loading={false}
@@ -445,16 +418,14 @@ function Evolution({ scope }: { scope: Scope }) {
             <ErrorState error={timeline.error} retry={timeline.retry} />
           ) : (
             <>
-              <TrendChart points={points} money={available} />
-              {mode !== "gross" && (
-                <Notice>
-                  Cette courbe montre les billets. L’historique certifié de la
-                  recette sélectionnée n’est pas disponible.
-                </Notice>
-              )}
+              <SalesChart points={timeline.data?.points ?? []} />
               {timeline.data?.through && (
-                <Txt muted style={{ fontSize: 12 }}>
-                  Observations jusqu’au {dayLabel(timeline.data.through)}.
+                <Txt muted style={{ fontSize: 11 }}>
+                  Observations jusqu’au {dayLabel(timeline.data.through)}
+                  {timeline.data.lag !== null
+                    ? ` · Retard de source : ${timeline.data.lag} jour(s)`
+                    : ""}
+                  .
                 </Txt>
               )}
             </>
@@ -757,7 +728,7 @@ function Tariffs({
                   </View>
                   <View
                     style={{
-                      height: 5,
+                      height: 9,
                       backgroundColor: c.secondary,
                       borderRadius: 3,
                     }}
@@ -765,8 +736,9 @@ function Tariffs({
                     <View
                       style={{
                         width: `${Math.min(100, ((sort === "tickets" ? item.tickets : (item.gross ?? 0)) / max) * 100)}%`,
-                        height: 5,
-                        backgroundColor: c.accent,
+                        height: 9,
+                        backgroundColor:
+                          kind === "tariff" ? "#4885FF" : "#AB83F6",
                         borderRadius: 3,
                       }}
                     />
@@ -1197,12 +1169,13 @@ function FilterSheet({
   );
 }
 function WorkspaceEvolution() {
+  const [enabled, setEnabled] = useState(false);
   const ctx = useDashboard();
   const projects = ctx.catalog.projects.filter(
     (p) => !ctx.season || p.season === ctx.season,
   );
   const data = useResource(
-    !ctx.from && !ctx.to
+    enabled && !ctx.from && !ctx.to
       ? "workspace-evolution:" +
           ctx.workspace.id +
           projects.map((p) => p.id).join(",")
@@ -1216,7 +1189,13 @@ function WorkspaceEvolution() {
         title="Dynamique · 7 jours"
         subtitle="Variations observées sur les derniers jours complets"
       />
-      {data.loading ? (
+      {!enabled ? (
+        <Button
+          secondary
+          title="Afficher la dynamique des projets"
+          onPress={() => setEnabled(true)}
+        />
+      ) : data.loading ? (
         <Loading />
       ) : data.error ? (
         <ErrorState error={data.error} retry={data.retry} />

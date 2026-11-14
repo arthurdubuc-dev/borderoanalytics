@@ -44,7 +44,7 @@ Le build Android Release local utilise la signature de test du projet généré.
 - Grilles de KPI adaptatives en portrait et paysage, abréviations k / M / Md et dépliage animé du chiffre exact.
 - Recettes publique TTC, Hors DL TTC, Hors DL + part producteur des DL, et Recette Nette avant commission promoteur.
 - Tarifs et réseaux : classements, recherches, catégories, variantes de prix et écarts au total officiel.
-- Historique observé des ventes ; les mesures sans historique certifié restent indisponibles.
+- Graphiques CA public TTC / billets, par jour ou cumul total, sur 7 / 30 / 90 jours ou tout l’historique ; lecture exacte au toucher et couverture indiquée.
 - Résumés de bordereaux, avec « dont Communication » et plateau seulement si autorisé.
 - Affiches des projets, prix moyen public pondéré, raccourci « À venir » et indication d’actualisation.
 - Reprises des erreurs temporaires, lectures groupées et cache limité à la mémoire du compte/espace courant.
@@ -82,3 +82,5 @@ deno check --config supabase/functions/mobile-dashboard/deno.json supabase/funct
 Voir `docs/RELEASE_TEST.md` pour les vérifications réellement effectuées et les limites du premier build. Les relevés d’audit internes et configurations locales ne sont pas publiés dans ce dépôt.
 
 Les améliorations et leur parcours de vérification sont décrits dans `docs/EVOLUTIONS_1_0.md`.
+
+Voir `docs/EVOLUTIONS_ANALYTICS.md` pour la mise à jour des graphiques et des chargements.

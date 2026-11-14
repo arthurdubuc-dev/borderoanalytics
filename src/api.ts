@@ -1,4 +1,5 @@
 import { rpc, table, request } from "./client";
+import { eventTimeline } from "./analytics";
 import {
   numberOrNull as num,
   type Workspace,
@@ -156,11 +157,16 @@ export function eligible(d: DateSummary) {
 export async function financials(
   scope: Scope,
   signal: AbortSignal,
+  sections = Boolean(scope.eventId),
 ): Promise<FinanceSummary[]> {
   const result = await request<{
     schema_version: string;
     dates: FinanceSummary[];
-  }>("/functions/v1/mobile-dashboard", signal, { action: "finance", scope });
+  }>("/functions/v1/mobile-dashboard", signal, {
+    action: "finance",
+    scope,
+    sections,
+  });
   if (result.schema_version !== "1.0" || !Array.isArray(result.dates))
     throw new Error("CONTRACT");
   return result.dates;
@@ -317,13 +323,13 @@ export async function timeline(
       signal,
     );
     return {
-      points: points.map((p) => ({
-        day: String(p.snapshot_date),
-        tickets: num(p.tickets_sold),
-        gross: num(p.gross_revenue),
-        span: null,
-        status: "observed",
-      })),
+      points: eventTimeline(
+        points.map((p) => ({
+          day: String(p.snapshot_date),
+          tickets: num(p.tickets_sold),
+          gross: num(p.gross_revenue),
+        })),
+      ),
       through: str(points.at(-1)?.snapshot_date),
       lag: null,
     };
@@ -339,6 +345,8 @@ export async function timeline(
     points: rows(sales?.days).map((d) => ({
       day: String(d.day),
       tickets: num(d.cumulative),
+      dailyTickets: num(d.tickets),
+      dailyGross: num(d.gross_revenue_ttc),
       gross: num(d.gross_revenue_cumulative),
       span: num(d.span_days),
       status: String(d.status),
