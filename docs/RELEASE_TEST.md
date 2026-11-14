@@ -1,36 +1,27 @@
-# Bordero 1.0.0 · Build 1 — build de test Release
+# Bordero 1.0.0 — Build 1 · validation Release
 
-Application distincte de Roadbook, nom affiché Bordero, identifiant `io.bordero.dashboard`. Le lancement Run de Xcode utilise Release et le JavaScript est embarqué dans le binaire.
+Application distincte de Roadbook, identifiant `io.bordero.dashboard`. Xcode Run utilise Release et embarque le JavaScript.
 
-## Vérifications
+## Vérifications réussies
 
-- TypeScript et 64 tests automatisés réussis : formats exacts/compacts, filtres, calculs issus du Web, part producteur des DL, recette nette avant commission promoteur, communication et protection du plateau.
-- Fonction serveur mobile-dashboard version 5 déployée sur autorisation explicite ; authentification JWT requise.
-- Vérifications distantes : requêtes sans session et avec session invalide refusées (401), clé publique seule sans utilisateur refusée (403).
-- Build iOS Release compilé et lancé sur simulateur iPhone iOS 27.2 ; écran de connexion vérifié visuellement, sans serveur Metro. Adaptation du cycle de vie des scènes iOS 27 reprise de la configuration mobile existante.
-- Build iOS Release destiné à un iPhone physique compilé avec la signature Apple du projet. Installation et recette sur le téléphone à effectuer dans Xcode.
-- Version vérifiée dans le binaire iOS compilé : `CFBundleShortVersionString=1.0.0`, `CFBundleVersion=1`.
-- Nouvelle couverture automatisée : colonnes portrait/paysage/grandes polices, palette du Web, moyenne pondérée, reprises bornées, cache/annulation, renouvellement de session et isolation entre comptes.
-- Build Android Release compilé avec succès (`assembleRelease`), APK local de test. Aucun appareil Android n’a été utilisé pour la recette connectée.
+- TypeScript et 64 tests automatisés ; contrôle Deno de la fonction serveur.
+- Compilation Release iPhone physique, simulateur iOS et Android. L’APK Android local conserve la signature de test, sans publication Play Store.
+- Installation sur l’iPhone physique et ouverture avec sa session normale : tableau de bord avec chiffres confirmé par l’utilisateur ; lecture financière réussie constatée dans les journaux du service.
+- Version des binaires : 1.0.0, Build 1. Logo fourni conservé à l’identique.
+- Rendu natif Jour et Nuit vérifié dans un aperçu distinct. Dispositions portrait/paysage et grandes polices couvertes par les tests de grille ; recette visuelle complète sur appareil restant à effectuer.
+- Service mobile-dashboard version 5 actif, JWT obligatoire ; accès anonyme refusé. Fonctions SQL de lecture groupée sous SECURITY INVOKER et RLS, sans accès anonyme.
+- Formules du moteur financier Web inchangées et empreintes de ses sources vérifiées.
 
-## Recette avec le compte utilisateur
+## Chargements : état actuel
 
-La connexion et la consultation de données réelles doivent être vérifiées avec un compte Bordero autorisé, sur le téléphone cible. Aucun identifiant utilisateur n’est fourni dans les sources et aucun accès artificiel n’a été créé pour les tests.
+La lecture économique du Web remplace les vues lourdes au démarrage. Les quatre recettes sont préparées une fois par espace, puis partagées avec les projets et les dates. Le bordereau et son plateau sont chargés séparément, à l’approche de la section.
 
-La grille en paysage est couverte par les tests de disposition ; sa recette visuelle avec les données réelles sur appareil reste à effectuer. Le simulateur de cette livraison est sur l’écran de connexion.
+Une lecture financière réelle a réussi en environ 19,7 secondes, après des tentatives ayant dépassé le délai en base. Cette durée reste trop élevée. La migration de ciblage SQL `20261114192730_mobile_dashboard_scope_predicate_pushdown.sql` a donc été appliquée : filtres directs sur les dates et maintien des contrôles d’accès. Les plans comparés, dont un plan préparé générique avec des identifiants synthétiques, confirment l’utilisation des index au lieu des balayages globaux. Le nouveau délai réel reste à mesurer après une actualisation sur le téléphone.
 
-Tester l’accueil, le changement de workspace, une tournée, une date, les quatre recettes, la grille tarifaire, les réseaux et les résumés du bordereau. Comparer les valeurs exactes au Web. Tester aussi la déconnexion, le mode sombre et les grandes polices.
+Voir `CHARGEMENTS_RECETTES.md` pour le fonctionnement et les limites. Aucune garantie de temps réel n’est déduite des tests automatisés ou des estimations du plan SQL.
 
-Les observations globales sans ventilation certifiée restent partielles. Le net et les DL hérités d’un report ne sont pas reconstitués à partir des prix actuels. Les totaux indiquent leur couverture ; le plateau reste indisponible si ses sources ou ses droits ne permettent pas un calcul complet.
+## Recette à poursuivre
 
-Les montants de coûts reprennent les agrégats historiques du bordereau Web sans les renommer arbitrairement HT. Le sous-total Communication est inclus dans Marketing. Aucun bénéfice ou total de dépenses n’est exposé.
+Actualiser le tableau de bord, vérifier Hors DL + part producteur des DL et Nette, puis comparer les chiffres exacts au Web. Tester changement d’espace, déconnexion, retour depuis l’arrière-plan, portrait/paysage et grandes polices.
 
-Ce build sert à la recette ; il ne constitue pas une publication App Store ou Play Store.
-
-La mise à jour graphique et les optimisations de lecture sont décrites dans `EVOLUTIONS_ANALYTICS.md`. Le contrôle natif du graphique a utilisé un aperçu distinct avec des données synthétiques, absent du build livré. Une lecture sans connexion du service version 3 est toujours refusée (401).
-
-En-tête flottant et préférence Jour / Nuit / Automatique : rendu natif Jour et Nuit vérifié dans un aperçu de test distinct ; restauration et ordre des écritures couverts par les tests. Voir `EVOLUTIONS_APPARENCE.md`. La recette dans le profil du compte connecté reste à effectuer sur le téléphone.
-
-Correction des premières lectures : voir `CHARGEMENTS_RECETTES.md`. Les fonctions de lecture groupée sont déployées, les permissions et le refus anonyme ont été vérifiés. La version Release a été installée sur l’iPhone physique ; son verrouillage a empêché le lancement et la recette avec la session normale. Aucun temps réel sur cet appareil n’est annoncé comme validé.
-
-Vérification connectée ultérieure : le tableau de bord et les recettes calculables ont été confirmés avec la session normale. Une latence d’environ 20 secondes a conduit à appliquer la migration de ciblage SQL `20261114192730_mobile_dashboard_scope_predicate_pushdown.sql`. Le gain après cette seconde migration reste à mesurer sur une nouvelle lecture réelle.
+Une source incomplète, une continuité non résolue ou des DL hérités non certifiés restent indisponibles et signalés. Les coûts ne sont pas renommés arbitrairement HT, Communication reste incluse dans Marketing et le plateau reste protégé par les droits. Aucun résultat ne permet d’inférer un plateau masqué.
