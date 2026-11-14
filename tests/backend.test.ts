@@ -86,6 +86,15 @@ describe("finance issue du moteur Web", () => {
     expect(r.sections.find((s) => s.key === "P")?.amount).toBe(100);
   });
 });
+it("ne certifie pas une recette à zéro lorsqu’un tarif utilisé est manquant", () => {
+  const result = buildPublicFinance({
+    ...base,
+    source: { source_type: "bordero_sales", gross_revenue: 0 },
+    prices: [],
+  });
+  expect(result.producerDl).toBeNull();
+  expect(result.net).toBeNull();
+});
 describe("droits et validation serveur", () => {
   it("refuse tout accès sans JWT avant de lire la base", async () => {
     let calls = 0;
@@ -147,39 +156,172 @@ describe("droits et validation serveur", () => {
   });
 });
 
-describe('contrat serveur complet avec sources simulées', () => {
-  const workspaceId = '22222222-2222-4222-8222-222222222222';
-  const projectId = '33333333-3333-4333-8333-333333333333';
-  function fixture(allow=true){
-    const calls:string[]=[];
-    const fetcher:typeof fetch=async(input,init)=>{
-      const url=new URL(String(input)); calls.push(url.pathname);
-      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer caller-session');
-      expect(new Headers(init?.headers).get('apikey')).toBe('public-key');
-      let payload:unknown=[];
-      if(url.pathname==='/auth/v1/user')payload={id};
-      else if(url.pathname.endsWith('get_my_account_lifecycle'))payload={success:true,account_status:'active'};
-      else if(url.pathname.endsWith('get_date_capabilities'))payload={role:'viewer',canViewBordereau:allow};
-      else if(url.pathname.endsWith('/projects')){expect(url.searchParams.get('workspace_id')).toBe('eq.'+workspaceId);payload=[{id:projectId,workspace_id:workspaceId,vat_rate:5.5,tax_profile:[]}];}
-      else if(url.pathname.endsWith('/event_dates'))payload=[{...base.date,workspace_id:workspaceId,project_id:projectId,tour_id:null,date:'2026-11-14'}];
-      else if(url.pathname.endsWith('/sales'))payload=base.sales.map(s=>({...s,event_date_id:id}));
-      else if(url.pathname.endsWith('/ticket_prices'))payload=base.prices.map(p=>({...p,event_date_id:id}));
-      else if(url.pathname.endsWith('/v_event_date_sales_current_canonical'))payload=[{...base.source,event_date_id:id}];
-      else if(url.pathname.endsWith('/workspaces'))payload=[{id:workspaceId,organization_id:'org'}];
-      else if(url.pathname.endsWith('/workspace-billing-context'))payload={entitlements:{orgKind:'producer'}};
-      else if(url.pathname.endsWith('/bordereau_cost_items'))payload=[{event_date_id:id,group_code:'E',cell_code:'E01',quantity:1,total:999}];
-      return new Response(JSON.stringify(payload),{status:200});
+describe("contrat serveur complet avec sources simulées", () => {
+  const workspaceId = "22222222-2222-4222-8222-222222222222";
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  function fixture(allow = true) {
+    const calls: string[] = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      const url = new URL(String(input));
+      calls.push(url.pathname);
+      expect(new Headers(init?.headers).get("Authorization")).toBe(
+        "Bearer caller-session",
+      );
+      expect(new Headers(init?.headers).get("apikey")).toBe("public-key");
+      let payload: unknown = [];
+      if (url.pathname === "/auth/v1/user") payload = { id };
+      else if (url.pathname.endsWith("get_my_account_lifecycle"))
+        payload = { success: true, account_status: "active" };
+      else if (url.pathname.endsWith("mobile_dashboard_date_capabilities"))
+        payload = [
+          {
+            event_date_id: id,
+            capabilities: { role: "viewer", canViewBordereau: allow },
+          },
+        ];
+      else if (url.pathname.endsWith("mobile_dashboard_finance_inputs"))
+        payload = {
+          capabilities: [
+            {
+              event_date_id: id,
+              capabilities: { role: "viewer", canViewBordereau: allow },
+            },
+          ],
+          sales: allow
+            ? base.sales.map((s) => ({ ...s, event_date_id: id }))
+            : [],
+          prices: allow
+            ? base.prices.map((p) => ({ ...p, event_date_id: id }))
+            : [],
+          taxes: [],
+          sources: allow ? [{ ...base.source, event_date_id: id }] : [],
+          economic: allow
+            ? [
+                {
+                  event_date_id: id,
+                  inherited_tickets: 0,
+                  revenue_visible: true,
+                  continuity_state: "none",
+                },
+              ]
+            : [],
+          dates: allow
+            ? [
+                {
+                  ...base.date,
+                  workspace_id: workspaceId,
+                  project_id: projectId,
+                  tour_id: null,
+                  date: "2026-11-14",
+                },
+              ]
+            : [],
+          projects: allow
+            ? [
+                {
+                  id: projectId,
+                  workspace_id: workspaceId,
+                  vat_rate: 5.5,
+                  tax_profile: [],
+                },
+              ]
+            : [],
+        };
+      else if (url.pathname.endsWith("/projects")) {
+        expect(url.searchParams.get("workspace_id")).toBe("eq." + workspaceId);
+        payload = [
+          {
+            id: projectId,
+            workspace_id: workspaceId,
+            vat_rate: 5.5,
+            tax_profile: [],
+          },
+        ];
+      } else if (url.pathname.endsWith("/event_dates"))
+        payload = [
+          {
+            ...base.date,
+            workspace_id: workspaceId,
+            project_id: projectId,
+            tour_id: null,
+            date: "2026-11-14",
+          },
+        ];
+      else if (url.pathname.endsWith("/sales"))
+        payload = base.sales.map((s) => ({ ...s, event_date_id: id }));
+      else if (url.pathname.endsWith("/ticket_prices"))
+        payload = base.prices.map((p) => ({ ...p, event_date_id: id }));
+      else if (url.pathname.endsWith("/v_event_date_sales_current_canonical"))
+        payload = [{ ...base.source, event_date_id: id }];
+      else if (url.pathname.endsWith("/workspaces"))
+        payload = [{ id: workspaceId, organization_id: "org" }];
+      else if (url.pathname.endsWith("/workspace-billing-context"))
+        payload = { entitlements: { orgKind: "producer" } };
+      else if (url.pathname.endsWith("/bordereau_cost_items"))
+        payload = [
+          {
+            event_date_id: id,
+            group_code: "E",
+            cell_code: "E01",
+            quantity: 1,
+            total: 999,
+          },
+        ];
+      return new Response(JSON.stringify(payload), { status: 200 });
     };
-    return{handler:createHandler({url:'https://example.supabase.co',anonKey:'public-key'},fetcher),calls};
+    return {
+      handler: createHandler(
+        { url: "https://example.supabase.co", anonKey: "public-key" },
+        fetcher,
+      ),
+      calls,
+    };
   }
-  function req(event=false){return new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer caller-session'},body:JSON.stringify({action:'finance',scope:{workspaceId,...(event?{eventId:id}:{})}})});}
-  it('un résumé global ne lit aucune source de plateau ou de personnel',async()=>{
-    const{handler,calls}=fixture();const r=await handler(req());const body=await r.json();expect(r.status).toBe(200);expect(body.dates[0].net).toBe(947.87);expect(body.dates[0].sections).toEqual([]);expect(calls.some(s=>/staff|hotel|tour_cost|bordereau_cost|communication_actions/.test(s))).toBe(false);
+  function req(event = false) {
+    return new Request("https://example.test", {
+      method: "POST",
+      headers: { Authorization: "Bearer caller-session" },
+      body: JSON.stringify({
+        action: "finance",
+        scope: { workspaceId, ...(event ? { eventId: id } : {}) },
+      }),
+    });
+  }
+  it("un résumé global ne lit aucune source de plateau ou de personnel", async () => {
+    const { handler, calls } = fixture();
+    const r = await handler(req());
+    const body = await r.json();
+    expect(r.status).toBe(200);
+    expect(body.dates[0].net).toBe(947.87);
+    expect(body.dates[0].sections).toEqual([]);
+    expect(
+      calls.some((s) =>
+        /staff|hotel|tour_cost|bordereau_cost|communication_actions/.test(s),
+      ),
+    ).toBe(false);
   });
-  it('une date lisible ne révèle pas E à un viewer, même si une source lui renvoie E',async()=>{
-    const{handler,calls}=fixture();const r=await handler(req(true));const body=await r.json();expect(r.status).toBe(200);expect(body.dates[0].sections.some((s:{key:string})=>s.key==='E')).toBe(false);expect(body.dates[0]).not.toHaveProperty('result');expect(calls.some(s=>/staff|hotel|tour_cost/.test(s))).toBe(false);
+  it("une date lisible ne révèle pas E à un viewer, même si une source lui renvoie E", async () => {
+    const { handler, calls } = fixture();
+    const r = await handler(req(true));
+    const body = await r.json();
+    expect(r.status).toBe(200);
+    expect(
+      body.dates[0].sections.some((s: { key: string }) => s.key === "E"),
+    ).toBe(false);
+    expect(body.dates[0]).not.toHaveProperty("result");
+    expect(calls.some((s) => /staff|hotel|tour_cost/.test(s))).toBe(false);
   });
-  it('les droits sont vérifiés avant toute lecture financière brute',async()=>{
-    const{handler,calls}=fixture(false);const r=await handler(req(true));expect((await r.json()).dates).toEqual([]);expect(calls.some(s=>s.endsWith('/sales')||s.endsWith('/ticket_prices')||s.endsWith('/bordereau_cost_items'))).toBe(false);
+  it("les droits sont vérifiés avant toute lecture financière brute", async () => {
+    const { handler, calls } = fixture(false);
+    const r = await handler(req(true));
+    expect((await r.json()).dates).toEqual([]);
+    expect(
+      calls.some(
+        (s) =>
+          s.endsWith("/sales") ||
+          s.endsWith("/ticket_prices") ||
+          s.endsWith("/bordereau_cost_items"),
+      ),
+    ).toBe(false);
   });
 });

@@ -132,7 +132,9 @@ export function createReadTransport(options: Options) {
   }
   return {
     request: <T>(path: string, signal: AbortSignal, body?: unknown) =>
-      /mobile-dashboard|get_project_sales_|v_event_date_sales_/.test(path)
+      /mobile-dashboard|get_project_sales_|get_event_dates_economic_sales|v_event_date_sales_/.test(
+        path,
+      )
         ? expensive.run(signal, () => read<T>(path, signal, body))
         : read<T>(path, signal, body),
     image: (path: string, signal: AbortSignal) =>

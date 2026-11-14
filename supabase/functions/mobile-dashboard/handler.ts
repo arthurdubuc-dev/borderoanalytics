@@ -130,7 +130,7 @@ function store(
     ids: string[],
     select: string,
     order = "id.asc",
-    batchSize = 30,
+    batchSize = 100,
   ) {
     const out: Row[] = [];
     for (let i = 0; i < ids.length; i += batchSize)
@@ -308,6 +308,7 @@ export function buildPublicFinance(input: {
   canPlateau: boolean;
   allocation: number | null;
   plateauWarning?: string;
+  revenueWarning?: string;
 }) {
   const {
     date: d,
@@ -357,13 +358,27 @@ export function buildPublicFinance(input: {
     enabled: true,
   });
   const warnings: string[] = [];
+  const detailedSalesComplete = sales.every(
+    (s) =>
+      s.quantity !== null &&
+      s.quantity !== undefined &&
+      Number.isInteger(Number(s.quantity)) &&
+      prices.some(
+        (p) =>
+          p.id === s.ticket_price_id &&
+          p.price_ht !== null &&
+          Number.isFinite(Number(p.price_ht)),
+      ),
+  );
   const comparable =
+    detailedSalesComplete &&
     source?.source_type === "bordero_sales" &&
     source.gross_revenue !== null &&
     Math.abs(Number(source.gross_revenue) - c.recetteTTC) < 0.01;
   if (!comparable)
     warnings.push(
-      "Les recettes financières ne sont pas réconciliées avec la source commerciale actuelle.",
+      input.revenueWarning ??
+        "Les recettes financières ne sont pas réconciliées avec la source commerciale actuelle.",
     );
   if (input.plateauWarning) warnings.push(input.plateauWarning);
   const section = (
@@ -416,6 +431,7 @@ export function buildPublicFinance(input: {
 }
 export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
   return async (request: Request): Promise<Response> => {
+    const started = Date.now();
     if (request.method !== "POST")
       return reply({ code: "METHOD_NOT_ALLOWED" }, 405);
     const authorization = request.headers.get("Authorization") ?? "";
@@ -475,92 +491,114 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
             selected.some((s) => s.project_id === d.project_id),
           )
         : selected;
-      const capabilities = await parallelMap(capabilityDates, 6, (d) =>
-        db.rpc("get_date_capabilities", { _event_date_id: d.id }),
+      if (capabilityDates.length > 500)
+        throw new SafeError(422, "SCOPE_TOO_LARGE");
+      const batches: Row[][] = [];
+      for (let i = 0; i < selected.length; i += 20)
+        batches.push(selected.slice(i, i + 20));
+      const snapshots = await parallelMap(batches, 2, async (batch) => {
+        const value = await db.rpc("mobile_dashboard_finance_inputs", {
+          p_workspace_id: scope.workspaceId,
+          p_event_date_ids: batch.map((d) => d.id),
+        });
+        for (const key of [
+          "capabilities",
+          "sales",
+          "prices",
+          "taxes",
+          "sources",
+          "economic",
+          "dates",
+          "projects",
+        ])
+          if (!Array.isArray(value?.[key]))
+            throw new SafeError(503, "SOURCE_INVALID");
+        return value as Record<string, Row[]>;
+      });
+      const keys = [
+        "capabilities",
+        "sales",
+        "prices",
+        "taxes",
+        "sources",
+        "economic",
+        "dates",
+        "projects",
+      ] as const;
+      const snapshot = Object.fromEntries(
+        keys.map((key) => [key, snapshots.flatMap((part) => part[key] ?? [])]),
+      ) as Record<(typeof keys)[number], Row[]>;
+      const snapshotProjects = new Map<string, Row>();
+      for (const part of snapshots)
+        for (const d of part.dates ?? []) {
+          const p = part.projects?.find((p) => p.id === d.project_id);
+          if (p) snapshotProjects.set(d.id, p);
+        }
+      const capabilityRows = includeSections
+        ? await db.rpc("mobile_dashboard_date_capabilities", {
+            p_workspace_id: scope.workspaceId,
+            p_event_date_ids: capabilityDates.map((d) => d.id),
+          })
+        : snapshot.capabilities;
+      if (!Array.isArray(capabilityRows))
+        throw new SafeError(503, "SOURCE_INVALID");
+      const caps = new Map<string, Row>(
+        capabilityRows.map((row: Row) => [row.event_date_id, row.capabilities]),
       );
-      const caps = new Map(
-        capabilityDates.map((d, i) => [d.id, capabilities[i]]),
-      );
-      const authorized = selected.filter(
-        (d) => caps.get(d.id)?.canViewBordereau === true,
+      const authorized = (snapshot.dates as Row[]).filter(
+        (d) =>
+          caps.get(d.id)?.canViewBordereau === true &&
+          d.workspace_id === scope.workspaceId &&
+          (!scope.projectId || d.project_id === scope.projectId) &&
+          (!scope.eventId || d.id === scope.eventId) &&
+          (scope.tourId === undefined || d.tour_id === scope.tourId) &&
+          (!scope.from || d.date >= scope.from) &&
+          (!scope.to || d.date <= scope.to) &&
+          snapshotProjects.has(d.id),
       );
       const ids = authorized.map((d) => d.id);
       if (!ids.length) return reply({ schema_version: "1.0", dates: [] });
-      const [
-        sales,
-        prices,
-        costs,
-        taxes,
-        communication,
-        sources,
-        workspaces,
-        billing,
-        economic,
-      ] = await Promise.all([
-        db.forDates(
-          "sales",
-          ids,
-          "id,event_date_id,ticket_price_id,quantity,platform",
-        ),
-        db.forDates(
-          "ticket_prices",
-          ids,
-          "id,event_date_id,tariff_name,price_ht,dl_producer,dl_venue,dl_distribution",
-        ),
-        includeSections
-          ? db.forDates(
+      const { sales, prices, taxes, sources, economic } = snapshot as {
+        sales: Row[];
+        prices: Row[];
+        taxes: Row[];
+        sources: Row[];
+        economic: Row[];
+      };
+      const [costs, communication, workspaces, billing] = includeSections
+        ? await Promise.all([
+            db.forDates(
               "bordereau_cost_items",
               ids,
               "event_date_id,group_code,cell_code,total,quantity",
-            )
-          : Promise.resolve([]),
-        db.forDates(
-          "bordereau_taxes",
-          ids,
-          "event_date_id,code,label,mode,value,apply_to",
-        ),
-        includeSections
-          ? db.forDates(
+            ),
+            db.forDates(
               "communication_actions",
               ids,
               "event_date_id,total_cost",
-            )
-          : Promise.resolve([]),
-        db.forDates(
-          "v_event_date_sales_current_canonical",
-          ids,
-          "event_date_id,source_type,gross_revenue",
-          "event_date_id.asc",
-          100,
-        ),
-        includeSections
-          ? db.table("workspaces", {
+            ),
+            db.table("workspaces", {
               id: "eq." + scope.workspaceId,
               select: "id,organization_id",
-            })
-          : Promise.resolve([]),
-        includeSections
-          ? db
+            }),
+            db
               .call("/functions/v1/workspace-billing-context", {
                 workspaceId: scope.workspaceId,
               })
-              .catch(() => ({ entitlements: {} }))
-          : Promise.resolve({ entitlements: {} }),
-        db.forDates(
-          "v_event_date_sales_economic_current",
-          ids,
-          "event_date_id,inherited_tickets,continuity_pending",
-          "event_date_id.asc",
-          100,
-        ),
-      ]);
+              .catch(() => ({ entitlements: {} })),
+          ])
+        : [[], [], [], { entitlements: {} }];
       const entitlements = billing.entitlements ?? {},
         workspace = workspaces[0] ?? {};
       const plateau = new Map<
         string,
         { get: (d: Row) => number; error?: string }
       >();
-      for (const project of projects) {
+      for (const originalProject of projects) {
+        const project = snapshot.projects.find(
+          (p) => p.id === originalProject.id,
+        );
+        if (!project) continue;
         const pd = dates.filter((d) => d.project_id === project.id);
         const can =
           includeSections &&
@@ -600,7 +638,7 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
             .filter((d) =>
               canReadPlateau(
                 caps.get(d.id) ?? {},
-                projects.find((p) => p.id === d.project_id)!,
+                snapshotProjects.get(d.id)!,
                 workspace,
                 entitlements,
               ),
@@ -615,7 +653,7 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
           )
         : [];
       const result = authorized.map((d) => {
-        const project = projects.find((p) => p.id === d.project_id)!;
+        const project = snapshotProjects.get(d.id)!;
         const own = (r: Row) => r.event_date_id === d.id;
         const canPlateau =
           includeSections &&
@@ -627,17 +665,31 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
           );
         const pool = plateau.get(d.project_id);
         const amount = canPlateau ? pool?.get(d) : null;
+        const eco = economic.find(own);
+        const revenueWarning = !eco
+          ? "La source économique de cette date est indisponible."
+          : eco.revenue_visible !== true
+            ? "Les recettes de cette date ne sont pas accessibles avec tes droits."
+            : eco.continuity_state === "pending_decision"
+              ? "La continuité de billetterie de cette date doit être finalisée."
+              : Number(eco.inherited_tickets) > 0
+                ? "Les billets hérités ne disposent pas d’une ventilation certifiée des DL producteur."
+                : sources.find(own)?.source_type !== "bordero_sales"
+                  ? "Cette source ne fournit pas de détail par tarif certifié pour les DL producteur."
+                  : undefined;
         const summary = buildPublicFinance({
+          revenueWarning,
           date: d,
           project,
           source: economic.some(
-            (e) =>
+            (e: Row) =>
               own(e) &&
-              (Number(e.inherited_tickets) > 0 ||
-                e.continuity_pending === true),
+              e.revenue_visible === true &&
+              Number(e.inherited_tickets) === 0 &&
+              e.continuity_state !== "pending_decision",
           )
-            ? undefined
-            : sources.find(own),
+            ? sources.find(own)
+            : undefined,
           sales: sales.filter(own),
           prices: prices.filter(own),
           costs: costs.filter(own),
@@ -651,6 +703,19 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
         if (!includeSections) summary.sections = [];
         return summary;
       });
+      console.info(
+        JSON.stringify({
+          code: "MOBILE_DASHBOARD_TIMING",
+          view: includeSections ? "bordereau" : "revenues",
+          duration_ms: Date.now() - started,
+          dates: result.length,
+          gross_available: result.filter((r) => r.gross !== null).length,
+          hors_dl_available: result.filter((r) => r.horsDl !== null).length,
+          producer_dl_available: result.filter((r) => r.producerDl !== null)
+            .length,
+          net_available: result.filter((r) => r.net !== null).length,
+        }),
+      );
       return reply({
         schema_version: "1.0",
         generated_at: new Date().toISOString(),
@@ -659,6 +724,12 @@ export function createHandler(env: Env, fetcher: typeof fetch = fetch) {
     } catch (error) {
       if (error instanceof SafeError)
         return reply({ code: error.code }, error.status);
+      console.error(
+        JSON.stringify({
+          code: "MOBILE_DASHBOARD_UNEXPECTED",
+          name: error instanceof Error ? error.name : "unknown",
+        }),
+      );
       return reply({ code: "SOURCE_UNAVAILABLE" }, 503);
     }
   };

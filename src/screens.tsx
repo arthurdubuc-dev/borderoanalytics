@@ -98,6 +98,7 @@ type ContextValue = {
   refreshing: boolean;
   refreshedAt?: number;
   refreshError?: unknown;
+  finance: ReturnType<typeof useResource<FinanceSummary[]>>;
   from: string;
   to: string;
   season: string;
@@ -125,11 +126,22 @@ function scopeFor(ctx: ContextValue, extra: Partial<Scope> = {}): Scope {
     ...extra,
   };
 }
-function useScopedFinance(scope: Scope, enabled = true) {
-  return useResource(
-    enabled ? "finance:" + JSON.stringify(scope) : null,
-    (signal) => api.financials(scope, signal),
+function useScopedFinance(scope: Scope, enabled = true, sections = false) {
+  const ctx = useDashboard();
+  // Keep project/date reads available if the global workspace read cannot complete.
+  const fallback =
+    enabled &&
+    !sections &&
+    !!scope.projectId &&
+    !!ctx.finance.error &&
+    !ctx.finance.data;
+  const detail = useResource(
+    enabled && (sections || fallback)
+      ? (sections ? "settlement:" : "scoped-finance:") + JSON.stringify(scope)
+      : null,
+    (signal) => api.financials(scope, signal, sections),
   );
+  return sections || fallback ? detail : ctx.finance;
 }
 function displayedRevenue(
   d: DateSummary,
@@ -303,7 +315,7 @@ function Summary({
         hour: "2-digit",
         minute: "2-digit",
       }).format(new Date(last))
-    : "Fraîcheur non renseignée";
+    : null;
   return (
     <>
       <ModeSelector />
@@ -314,9 +326,13 @@ function Summary({
           value={amount}
           money
           note={
-            missing
-              ? `Sous-total · ${known.length}/${valid.length} dates renseignées`
-              : "Appuyer pour le montant exact"
+            (ctx.mode === "producerDl" || ctx.mode === "net") &&
+            finance.loading &&
+            !finance.data
+              ? "Chargement de la recette…"
+              : missing
+                ? `Sous-total · ${known.length}/${valid.length} dates renseignées`
+                : "Appuyer pour le montant exact"
           }
         />
         <Kpi
@@ -346,7 +362,9 @@ function Summary({
             {known.length === 0
               ? "Aucune date ne fournit actuellement une recette détaillée réconciliée dans ce périmètre."
               : `${known.length}/${valid.length} dates sont incluses : le montant est un sous-total.`}{" "}
-            {finance.data.flatMap((d) => d.warnings ?? [])[0] ??
+            {finance.data
+              .filter((row) => valid.some((d) => d.id === row.eventId))
+              .flatMap((d) => d.warnings ?? [])[0] ??
               "Les autres dates ne disposent pas des sources ou des droits requis. Ouvre une date pour consulter son état."}
           </Notice>
         )}
@@ -355,9 +373,11 @@ function Summary({
           {valid.length} dates billetterie · {selected.length - valid.length}{" "}
           exclues
         </Txt>
-        <Txt muted style={{ fontSize: 12 }}>
-          · {sourceNote}
-        </Txt>
+        {sourceNote && (
+          <Txt muted style={{ fontSize: 12 }}>
+            · {sourceNote}
+          </Txt>
+        )}
       </View>
       {(ctx.mode === "net" || ctx.mode === "producerDl") &&
         finance.loading &&
@@ -855,63 +875,88 @@ function DateScreen({
         )}
       </Card>
       <Tariffs scope={scope} kind="distributor" />
+      <DeferredSection>
+        {(visible) => <Bordereau date={date} scope={scope} enabled={visible} />}
+      </DeferredSection>
+    </Page>
+  );
+}
+function Bordereau({
+  date,
+  scope,
+  enabled,
+}: {
+  date: DateSummary;
+  scope: Scope;
+  enabled: boolean;
+}) {
+  const finance = useScopedFinance(scope, enabled, true);
+  if (!enabled)
+    return (
       <Card>
         <Heading
           title="Bordereau"
-          subtitle="Résumés des tableaux · consultation uniquement"
+          subtitle="Les résumés se chargent à leur affichage."
         />
-        {finance.loading && !finance.data ? (
-          <Loading />
-        ) : finance.error && !finance.data ? (
-          <ErrorState error={finance.error} retry={finance.retry} />
-        ) : finance.data?.find((f) => f.eventId === date.id) ? (
-          <>
-            <KpiGrid>
-              {finance.data
-                .find((f) => f.eventId === date.id)!
-                .sections.map((section) => (
-                  <Kpi
-                    key={section.key}
-                    tone={section.key}
-                    badge={
-                      ["A", "B", "C", "D", "E"].includes(section.key)
-                        ? section.key
-                        : undefined
-                    }
-                    label={section.label}
-                    value={section.amount}
-                    money
-                    note={
-                      section.key === "P"
-                        ? "Incluse dans Marketing"
-                        : section.amount === null
-                          ? "Donnée indisponible"
-                          : "Appuyer pour le détail"
-                    }
-                    details={[section.basis, section.note]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  />
-                ))}
-            </KpiGrid>
-            <UpdatedNote
-              loading={finance.loading}
-              error={finance.error}
-              updatedAt={finance.updatedAt}
-            />
+      </Card>
+    );
+  return (
+    <Card>
+      <Heading
+        title="Bordereau"
+        subtitle="Résumés des tableaux · consultation uniquement"
+      />
+      {finance.loading && !finance.data ? (
+        <Loading />
+      ) : finance.error && !finance.data ? (
+        <ErrorState error={finance.error} retry={finance.retry} />
+      ) : finance.data?.find((f) => f.eventId === date.id) ? (
+        <>
+          <KpiGrid>
             {finance.data
               .find((f) => f.eventId === date.id)!
-              .warnings.map((w) => (
-                <Notice key={w} warning>
-                  {w}
-                </Notice>
+              .sections.map((section) => (
+                <Kpi
+                  key={section.key}
+                  tone={section.key}
+                  badge={
+                    ["A", "B", "C", "D", "E"].includes(section.key)
+                      ? section.key
+                      : undefined
+                  }
+                  label={section.label}
+                  value={section.amount}
+                  money
+                  note={
+                    section.key === "P"
+                      ? "Incluse dans Marketing"
+                      : section.amount === null
+                        ? "Donnée indisponible"
+                        : "Appuyer pour le détail"
+                  }
+                  details={[section.basis, section.note]
+                    .filter(Boolean)
+                    .join(" · ")}
+                />
               ))}
-          </>
-        ) : (
-          <Notice>Résumé non disponible avec tes droits.</Notice>
-        )}
-      </Card>
-    </Page>
+          </KpiGrid>
+          <UpdatedNote
+            loading={finance.loading}
+            error={finance.error}
+            updatedAt={finance.updatedAt}
+          />
+          {finance.data
+            .find((f) => f.eventId === date.id)!
+            .warnings.map((w) => (
+              <Notice key={w} warning>
+                {w}
+              </Notice>
+            ))}
+        </>
+      ) : (
+        <Notice>Résumé non disponible avec tes droits.</Notice>
+      )}
+    </Card>
   );
 }
 function ProjectScreen({
@@ -1074,16 +1119,44 @@ function TariffScreen({
     </Page>
   );
 }
+const Viewport = createContext(0);
+function DeferredSection({
+  children,
+}: {
+  children: (visible: boolean) => React.ReactNode;
+}) {
+  const bottom = useContext(Viewport);
+  const [top, setTop] = useState<number | null>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (top !== null && bottom >= top) setVisible(true);
+  }, [bottom, top]);
+  return (
+    <View onLayout={(event) => setTop(event.nativeEvent.layout.y)}>
+      {children(visible)}
+    </View>
+  );
+}
 function Page({ children }: { children: React.ReactNode }) {
   const ctx = useDashboard();
   const c = useTheme();
+  const [bottom, setBottom] = useState(0);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.bg }}
       contentContainerStyle={pageStyle}
+      onLayout={(event) => setBottom(event.nativeEvent.layout.height + 180)}
+      onScroll={(event) =>
+        setBottom(
+          event.nativeEvent.contentOffset.y +
+            event.nativeEvent.layoutMeasurement.height +
+            180,
+        )
+      }
+      scrollEventThrottle={120}
       refreshControl={
         <RefreshControl
-          refreshing={ctx.refreshing}
+          refreshing={ctx.refreshing || ctx.finance.loading}
           onRefresh={ctx.retry}
           tintColor="#B8A600"
         />
@@ -1094,7 +1167,7 @@ function Page({ children }: { children: React.ReactNode }) {
         error={ctx.refreshError}
         updatedAt={ctx.refreshedAt}
       />
-      {children}
+      <Viewport.Provider value={bottom}>{children}</Viewport.Provider>
     </ScrollView>
   );
 }
@@ -1413,6 +1486,10 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
   const workspaces = useResource("bootstrap", api.bootstrap);
   const workspace =
     workspaces.data?.find((w) => w.id === ws) ?? workspaces.data?.[0];
+  const finance = useResource(
+    workspace ? "workspace-finance:" + workspace.id : null,
+    (signal) => api.financials({ workspaceId: workspace!.id }, signal, false),
+  );
   const cache = useMemo(() => new ReadCache(), [workspace?.id]);
   useEffect(() => () => cache.clear(), [cache]);
   const cat = useResource(workspace ? "catalog:" + workspace.id : null, (s) =>
@@ -1436,6 +1513,7 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
     setRevision((n) => n + 1);
     cat.retry();
     dates.retry();
+    finance.retry();
   };
   const value: ContextValue | null =
     workspace && cat.data && dates.data
@@ -1449,6 +1527,7 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
           refreshing: cat.loading || dates.loading,
           refreshedAt: dates.updatedAt,
           refreshError: dates.error ?? cat.error,
+          finance,
           ...filters,
           setFilters,
         }

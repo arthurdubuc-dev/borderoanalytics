@@ -87,3 +87,5 @@ Les améliorations et leur parcours de vérification sont décrits dans `docs/EV
 Voir `docs/EVOLUTIONS_ANALYTICS.md` pour la mise à jour des graphiques et des chargements.
 
 Voir `docs/EVOLUTIONS_APPARENCE.md` pour l’en-tête flottant et le choix du thème.
+
+Les premières lectures et la préparation des quatre recettes sont décrites dans `docs/CHARGEMENTS_RECETTES.md`. Les entrées financières sont lues par lots cohérents sous les droits du compte ; les résumés de bordereaux se chargent séparément.

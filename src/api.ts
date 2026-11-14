@@ -1,4 +1,5 @@
 import { rpc, table, request } from "./client";
+import { mapCurrentSales } from "./salesMapping";
 import { eventTimeline } from "./analytics";
 import {
   numberOrNull as num,
@@ -66,81 +67,32 @@ export async function loadDates(
   projects: Project[],
   signal: AbortSignal,
 ): Promise<DateSummary[]> {
-  const [meta, canonical, economic] = await Promise.all([
-    table<Row>(
-      "event_dates",
-      {
-        select:
-          "id,project_id,tour_id,date,name,show_time,status,deal_type,capacity,venues:venue_id(name,city)",
-        workspace_id: `eq.${workspaceId}`,
-        order: "date.asc,id.asc",
-      },
-      signal,
-    ),
-    table<Row>(
-      "v_event_date_sales_current_canonical",
-      {
-        select:
-          "event_date_id,tickets_sold,gross_revenue,revenue_hors_dl_ttc,source_type,source_updated_at",
-        workspace_id: `eq.${workspaceId}`,
-        order: "event_date_id.asc",
-      },
-      signal,
-    ),
-    table<Row>(
-      "v_event_date_sales_economic_current",
-      {
-        select:
-          "event_date_id,economic_tickets,economic_gross_ttc,inherited_tickets,commercial_role,continuity_pending",
-        workspace_id: `eq.${workspaceId}`,
-        order: "event_date_id.asc",
-      },
-      signal,
-    ),
-  ]);
-  const sources = new Map(canonical.map((r) => [String(r.event_date_id), r]));
-  const eco = new Map(economic.map((r) => [String(r.event_date_id), r]));
+  if (!projects.length) return [];
+  const meta = await table<Row>(
+    "event_dates",
+    {
+      select:
+        "id,project_id,tour_id,date,name,show_time,status,deal_type,capacity,venues:venue_id(name,city)",
+      workspace_id: `eq.${workspaceId}`,
+      order: "date.asc,id.asc",
+    },
+    signal,
+  );
   const allowed = new Set(projects.map((p) => p.id));
-  return meta
-    .filter((r) => allowed.has(String(r.project_id)))
-    .map((r) => {
-      const c = sources.get(String(r.id));
-      const e = eco.get(String(r.id));
-      const venue = r.venues as Row | null;
-      return {
-        id: String(r.id),
-        projectId: String(r.project_id),
-        tourId: str(r.tour_id),
-        name: String(r.name ?? "Représentation"),
-        day: String(r.date),
-        time: str(r.show_time),
-        venue: str(venue?.name),
-        city: str(venue?.city),
-        status: String(r.status),
-        dealType: String(r.deal_type ?? "ticketing"),
-        tickets:
-          c?.source_type === "cession_attendance" ||
-          e?.continuity_pending === true
-            ? null
-            : num(e?.economic_tickets ?? c?.tickets_sold),
-        gross:
-          c?.source_type === "cession_attendance" ||
-          e?.continuity_pending === true
-            ? null
-            : num(e?.economic_gross_ttc ?? c?.gross_revenue),
-        horsDl:
-          c?.source_type === "cession_attendance" ||
-          Number(e?.inherited_tickets) > 0 ||
-          e?.continuity_pending === true
-            ? null
-            : num(c?.revenue_hors_dl_ttc),
-        inherited: num(e?.inherited_tickets),
-        updatedAt: str(c?.source_updated_at),
-        source: str(c?.source_type),
-        capacity: num(r.capacity),
-      };
-    });
+  const selected = meta.filter((r) => allowed.has(String(r.project_id)));
+  const economic: Row[] = [];
+  for (let i = 0; i < selected.length; i += 500) {
+    const batch = await rpc<Row[]>(
+      "get_event_dates_economic_sales",
+      { p_event_date_ids: selected.slice(i, i + 500).map((d) => String(d.id)) },
+      signal,
+    );
+    if (!Array.isArray(batch)) throw new Error("CONTRACT");
+    economic.push(...batch);
+  }
+  return mapCurrentSales(selected, economic);
 }
+
 export function eligible(d: DateSummary) {
   return (
     d.dealType !== "cession" &&
