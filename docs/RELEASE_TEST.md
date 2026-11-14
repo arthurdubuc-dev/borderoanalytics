@@ -32,3 +32,5 @@ La mise à jour graphique et les optimisations de lecture sont décrites dans `E
 En-tête flottant et préférence Jour / Nuit / Automatique : rendu natif Jour et Nuit vérifié dans un aperçu de test distinct ; restauration et ordre des écritures couverts par les tests. Voir `EVOLUTIONS_APPARENCE.md`. La recette dans le profil du compte connecté reste à effectuer sur le téléphone.
 
 Correction des premières lectures : voir `CHARGEMENTS_RECETTES.md`. Les fonctions de lecture groupée sont déployées, les permissions et le refus anonyme ont été vérifiés. La version Release a été installée sur l’iPhone physique ; son verrouillage a empêché le lancement et la recette avec la session normale. Aucun temps réel sur cet appareil n’est annoncé comme validé.
+
+Vérification connectée ultérieure : le tableau de bord et les recettes calculables ont été confirmés avec la session normale. Une latence d’environ 20 secondes a conduit à appliquer la migration de ciblage SQL `20261114192730_mobile_dashboard_scope_predicate_pushdown.sql`. Le gain après cette seconde migration reste à mesurer sur une nouvelle lecture réelle.

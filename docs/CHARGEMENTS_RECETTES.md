@@ -30,3 +30,13 @@ TypeScript, 64 tests et contrôle Deno réussis. Les tests couvrent un premier a
 Les tests automatisés ne donnent pas un temps réel garanti sur le téléphone. La vérification alternative avec la session normale de l’iPhone de test a été préparée et la version Release installée ; le lancement a été bloqué par le verrouillage du téléphone. La recette connectée de première ouverture et les temps avant/après restent à confirmer sur cet appareil.
 
 Pour la recette : déverrouiller le téléphone, ouvrir Bordero, attendre la première lecture puis choisir Hors DL + part producteur des DL et Nette. Ouvrir ensuite un projet et une date : les valeurs du résumé doivent être immédiatement réutilisées. Faire défiler jusqu’au bordereau pour charger ses résumés. Comparer les chiffres exacts au Web, puis changer d’espace et vérifier qu’aucune ancienne donnée ne reste affichée.
+
+## Vérification connectée et ciblage SQL
+
+Une ouverture avec la session normale de l’iPhone a confirmé le retour des quatre recettes pour les dates dont les sources sont calculables. Elle a aussi montré une latence proche de 20 secondes et des dépassements de délai sur des tentatives précédentes : cette durée n’est pas considérée comme satisfaisante.
+
+La migration `20261114192730_mobile_dashboard_scope_predicate_pushdown.sql` applique donc les identifiants demandés directement aux lectures de ventes, tarifs, observations, sources et taxes, avant les contrôles complémentaires de périmètre. Les contrôles d’autorisation restent obligatoires et les RLS restent actives. L’estimation du nombre de lignes de la lecture des capacités est adaptée aux petits lots.
+
+Le plan SQL comparé, avec des identifiants synthétiques et sans lecture de données financières, confirme que la sélection directe utilise les index des dates au lieu de balayer les tables de ventes, tarifs et observations. Cela valide la modification du plan, pas un gain de temps chiffré sur la session réelle. La nouvelle mesure nécessite une actualisation ou une nouvelle ouverture sur le téléphone, qui s’est reverrouillé pendant les vérifications.
+
+Cette correction est côté serveur : aucune nouvelle installation mobile n’est nécessaire. Les 64 tests applicatifs restent réussis et les permissions des fonctions sont inchangées.
