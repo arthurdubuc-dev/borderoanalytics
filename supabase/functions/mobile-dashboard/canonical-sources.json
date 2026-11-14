@@ -1,0 +1,125 @@
+{
+  "generatedAt": "2026-11-14T15:33:24.428Z",
+  "sources": [
+    {
+      "path": "src/hooks/useStaffCosts.ts",
+      "sha256": "b9e29e018142f66d82261eb53d77fb250f92ab138358c5538d77604d9a65e5dd"
+    },
+    {
+      "path": "src/hooks/useProjectHotels.ts",
+      "sha256": "f847365024df8d078d8e87be451c80b6b86befcf58d11005e8b14b790a8b15e0"
+    },
+    {
+      "path": "src/domain/ticketing/canonical/types.ts",
+      "sha256": "9432df93a38cc4b4ca19242e616d9e81d574ea827eade157e6f3d4128c4d1307"
+    },
+    {
+      "path": "src/domain/ticketing/canonical/money.ts",
+      "sha256": "d62e730586fd59ec51866b8a95bbca3dd30ada37a51ea0936cf5a4732435da08"
+    },
+    {
+      "path": "src/domain/ticketing/canonical/ticketingEngine.ts",
+      "sha256": "9da0ffb95e6c685bbcae3d4c2d41bca3e0641dbef95c040e044e70c79ec34eeb"
+    },
+    {
+      "path": "src/domain/ticketing/canonical/index.ts",
+      "sha256": "b14de500692cd1e881539c02409e82fd4d526da4772d8cdbbd489201b14ec1e9"
+    },
+    {
+      "path": "src/domain/finance/canonical/types.ts",
+      "sha256": "69f50e8f1d661256c2119e7015925f000dc8aa128f455088dcc3d141edb57d64"
+    },
+    {
+      "path": "src/domain/finance/canonical/money.ts",
+      "sha256": "4b8a575f79441afbe52ca6169e577650690b7df972b98b80e8c5aea3b2536223"
+    },
+    {
+      "path": "src/domain/finance/canonical/taxes.ts",
+      "sha256": "118994dee9400546c86efc9b6bee3ef432cce7dfe5538153ac95de89507b6393"
+    },
+    {
+      "path": "src/domain/finance/canonical/cessionEngine.ts",
+      "sha256": "3e5b3f16c4ccb42156297f0ca3d90273a935d9639a53bd1a85b2412a545added"
+    },
+    {
+      "path": "src/domain/finance/canonical/productionSummary.ts",
+      "sha256": "3943e5d7b447dcfc24a4e26af92e2fd2250712015355e9bc5bace139a331ddaf"
+    },
+    {
+      "path": "src/domain/finance/canonical/invariants.ts",
+      "sha256": "0198afeab67421a19939fffbddb7c1a9a06e6e0d665330da58773f242912e9d4"
+    },
+    {
+      "path": "src/domain/finance/canonical/financeEngine.ts",
+      "sha256": "cd102c444d9035e36b71d1afeec35b10996cd8cbda703d6327bedb09a76705d5"
+    },
+    {
+      "path": "src/domain/finance/canonical/index.ts",
+      "sha256": "fff2c8a004d662e471c1cc52e553b98cf1ff7c332d6f39ad3d00f8406b3ae08a"
+    },
+    {
+      "path": "src/domain/finance/canonical/adapters/bordereauInputAdapter.ts",
+      "sha256": "20f711db450bc6682782c0de923d1596cce51256074778b0a7bf15573980508b"
+    },
+    {
+      "path": "src/domain/finance/canonical/adapters/bordereauCanonicalService.ts",
+      "sha256": "c8eb5b2ec49106a02de8604a6a9b81d5537de3214f80c2659e230a23979df7b7"
+    },
+    {
+      "path": "src/domain/finance/canonical/adapters/bordereauTaxFields.ts",
+      "sha256": "9b95354f3b4a546ca23c2a497c41352640a53b506377d09286d3de9e628cf0da"
+    },
+    {
+      "path": "src/domain/finance/canonical/adapters/bordereauLogDedup.ts",
+      "sha256": "0350d349d31ba3b0fa0198b817c929e9b705e5fdb7cb47a00d33302f104c58a4"
+    },
+    {
+      "path": "src/domain/finance/canonical/adapters/cessionAdapter.ts",
+      "sha256": "ba75f4a2c35201f39c37b03bf0670342b02bc8a3191988b083d96ed3311ea6d8"
+    },
+    {
+      "path": "src/domain/finance/canonical/adapters/canonicalCessionService.ts",
+      "sha256": "2c6d1db97b409be2a66eafa49c1312d872d2abddae06ea37c28cce88fa181c74"
+    },
+    {
+      "path": "src/domain/finance/canonical/adapters/cessionShadowMode.ts",
+      "sha256": "e93ea9363b107459da532c2c2b062cd3150f3c9a922e73b6df19af0d9e69ae4b"
+    },
+    {
+      "path": "src/domain/finance/canonical/adapters/cessionSafeCutover.ts",
+      "sha256": "2ae96b3dc22c830baa2a1191fa3185e0e03cf1ae0f6d22201a4e72946cf11769"
+    },
+    {
+      "path": "src/domain/finance/canonical/adapters/bordereauCalculationsService.ts",
+      "sha256": "d77af75efe7faeb3227b3c1b7cf6754538d8404bde2dd3ad12e9b22ac57ac81e"
+    },
+    {
+      "path": "src/constants/dateStatuses.ts",
+      "sha256": "e9620c7820229893defbe9b80a22661d670120fc112c53b834f378cc75b3ff35"
+    },
+    {
+      "path": "src/domain/tourEconomics/amortization.ts",
+      "sha256": "a4e60cb7808affa06fc4259618cc3183f6fa6b1e86487944cb5d5f403cc3d4a3"
+    },
+    {
+      "path": "src/domain/tourEconomics/plateauView.ts",
+      "sha256": "1f410e828508b2781c4643607c4cbff705806a97b8b079b852979d2280f90263"
+    },
+    {
+      "path": "src/domain/tourEconomics/costLines.ts",
+      "sha256": "aa6a6a79837d4130aaebf1e04cd1b51650a8c073983d43e526b6a71c749e7bd5"
+    },
+    {
+      "path": "src/domain/hotels/invoiceCalc.ts",
+      "sha256": "0b293a371420b872c5bba6ae6cd8814439c1eb5adaee7d8eeddb7f0f9460ec94"
+    },
+    {
+      "path": "src/utils/hotelStatus.ts",
+      "sha256": "04a57764ba27989da30b183be4dfe0d679d4eff494508f9c1e1b5b8841d1118a"
+    },
+    {
+      "path": "src/utils/osm.ts",
+      "sha256": "bfbabee1908dd9d8ed64d4ad5352acee0af28cc0188fb57666f02385dbccb3c5"
+    }
+  ]
+}

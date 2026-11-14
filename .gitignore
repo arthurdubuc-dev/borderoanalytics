@@ -1,0 +1,17 @@
+node_modules/
+.expo/
+dist/
+.env*
+!.env.example
+ios/Pods/
+ios/build/
+android/.gradle/
+android/app/build/
+release-artifacts/
+*.xcuserstate
+xcuserdata/
+
+.DS_Store
+ios/.xcode.env.local
+docs/audit-2026-11-14/
+android/local.properties

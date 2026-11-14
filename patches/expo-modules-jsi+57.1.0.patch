@@ -1,0 +1,20 @@
+diff --git a/node_modules/expo-modules-jsi/apple/scripts/build-xcframework.sh b/node_modules/expo-modules-jsi/apple/scripts/build-xcframework.sh
+index 4c50653..a805f14 100755
+--- a/node_modules/expo-modules-jsi/apple/scripts/build-xcframework.sh
++++ b/node_modules/expo-modules-jsi/apple/scripts/build-xcframework.sh
+@@ -239,6 +239,8 @@ build_slice() {
+     SWIFT_COMPILATION_MODE=wholemodule \
+     CLANG_ENABLE_CODE_COVERAGE=NO \
+     CLANG_COVERAGE_MAPPING=NO \
++    CODE_SIGNING_ALLOWED=NO \
++    CODE_SIGNING_REQUIRED=NO \
+   )
+ 
+   local product_path="${BUILD_PRODUCTS_PATH}/${build_dir_name}"
+@@ -310,5 +312,5 @@
+   while IFS= read -r swiftinterface; do
+     local stripped_swiftinterface="${swiftinterface}.stripped"
+-    sed '/^extension __ObjC\./,/^}/d;/^@usableFromInline$/{N;/_ConstraintThatIsNotPartOfTheAPIOfThisLibrary/d;};/_ConstraintThatIsNotPartOfTheAPIOfThisLibrary/d' "$swiftinterface" > "$stripped_swiftinterface"
++    sed '/^extension __ObjC\./,/^}/d;/^extension __ObjC::/,/^}/d;/^@usableFromInline$/{N;/_ConstraintThatIsNotPartOfTheAPIOfThisLibrary/d;};/_ConstraintThatIsNotPartOfTheAPIOfThisLibrary/d' "$swiftinterface" > "$stripped_swiftinterface"
+     mv "$stripped_swiftinterface" "$swiftinterface"
+   done < <(find "${modules_dir}/${PACKAGE_NAME}.swiftmodule" -name '*.swiftinterface')

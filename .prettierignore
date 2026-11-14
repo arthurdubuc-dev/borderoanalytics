@@ -1,0 +1,7 @@
+node_modules
+.expo
+android
+ios
+dist
+supabase/functions/mobile-dashboard/canonical.mjs
+docs/audit-2026-11-14

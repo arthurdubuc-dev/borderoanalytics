@@ -1,0 +1,4 @@
+project_id = "afsdjjjunauppkzkrtmb"
+
+[functions.mobile-dashboard]
+verify_jwt = true
