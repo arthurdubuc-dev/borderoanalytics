@@ -1,21 +1,22 @@
 import type { ExpoConfig } from "expo/config";
+import { release } from "./src/release.ts";
 const config: ExpoConfig = {
   icon: "./assets/app-icon.png",
   name: "Bordero",
   slug: "bordero-dashboard",
-  version: "0.1.0",
+  version: release.version,
   scheme: "bordero-dashboard",
   orientation: "default",
   userInterfaceStyle: "automatic",
   backgroundColor: "#FFEE57",
   ios: {
     bundleIdentifier: "io.bordero.dashboard",
-    buildNumber: "1",
+    buildNumber: String(release.build),
     supportsTablet: true,
     appleTeamId: "X38VMPARWG",
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },
-  android: { package: "io.bordero.dashboard", versionCode: 1 },
+  android: { package: "io.bordero.dashboard", versionCode: release.build },
   plugins: [
     "./plugins/with-ios-scene-lifecycle.js",
     "./plugins/with-release-run.js",

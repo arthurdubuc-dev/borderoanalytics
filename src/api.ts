@@ -40,7 +40,7 @@ export async function catalog(workspaceId: string, signal: AbortSignal) {
     table<Project>(
       "projects",
       {
-        select: "id,name,season,workspace_id",
+        select: "id,name,season,workspace_id,poster_file_id,poster_url",
         workspace_id: `eq.${workspaceId}`,
         archived_at: "is.null",
         order: "name.asc,id.asc",
@@ -165,10 +165,68 @@ export async function financials(
     throw new Error("CONTRACT");
   return result.dates;
 }
+function parseDimension(d: Row): Dimension {
+  return {
+    key: String(d.key),
+    label: String(d.label ?? "Tarif"),
+    category: str(d.category_label),
+    tickets: num(d.tickets) ?? 0,
+    gross: num(d.gross_revenue_ttc),
+    horsDl: num(d.revenue_hors_dl_ttc),
+    variants: num(d.price_variants) ?? 1,
+    dateCount: num(d.dates_count),
+    priceIds: Array.isArray(d.ticket_price_ids)
+      ? (d.ticket_price_ids as string[])
+      : [],
+    priceMin: num(d.min_price_ttc),
+    priceMax: num(d.max_price_ttc),
+  };
+}
+export async function tariffEvents(
+  scope: Scope,
+  key: string,
+  signal: AbortSignal,
+) {
+  const result: Array<{ eventId: string; dimension: Dimension }> = [];
+  if (!scope.projectId) return result;
+  for (let offset = 0; ; offset += 25) {
+    const page = await rpc<Row>(
+      "get_project_sales_breakdown",
+      {
+        p_project_id: scope.projectId,
+        p_group_by: "tariff",
+        p_level: "by_event",
+        p_tour_id: scope.tourId ?? null,
+        p_from: scope.from ?? null,
+        p_to: scope.to ?? null,
+        p_include_cancelled: false,
+        p_limit: 25,
+        p_offset: offset,
+      },
+      signal,
+    );
+    const events = rows(page.events);
+    for (const event of events) {
+      const dimension = rows(event.dimensions).find((d) => d.key === key);
+      if (dimension)
+        result.push({
+          eventId: String(event.event_date_id),
+          dimension: parseDimension(dimension),
+        });
+    }
+    if (
+      !events.length ||
+      offset + events.length >= Number(page.total_dates) ||
+      offset >= 975
+    )
+      return result;
+  }
+}
 export async function breakdown(
   scope: Scope,
   kind: "tariff" | "distributor",
   signal: AbortSignal,
+  eventDay?: string,
 ): Promise<Breakdown> {
   if (!scope.projectId) throw new Error("SCOPE");
   const raw = await rpc<Row>(
@@ -178,8 +236,8 @@ export async function breakdown(
       p_group_by: kind,
       p_level: scope.eventId ? "by_event" : "rollup",
       p_tour_id: scope.tourId ?? null,
-      p_from: scope.from ?? null,
-      p_to: scope.to ?? null,
+      p_from: eventDay ?? scope.from ?? null,
+      p_to: eventDay ?? scope.to ?? null,
       p_include_cancelled: false,
       p_limit: 25,
       p_offset: 0,
@@ -201,8 +259,8 @@ export async function breakdown(
         p_group_by: kind,
         p_level: "by_event",
         p_tour_id: scope.tourId ?? null,
-        p_from: scope.from ?? null,
-        p_to: scope.to ?? null,
+        p_from: eventDay ?? scope.from ?? null,
+        p_to: eventDay ?? scope.to ?? null,
         p_limit: 25,
         p_offset: offset,
       },
@@ -231,23 +289,7 @@ export async function breakdown(
         ? "partial"
         : "complete";
   return {
-    items: dims.map(
-      (d): Dimension => ({
-        key: String(d.key),
-        label: String(d.label ?? "Tarif"),
-        category: str(d.category_label),
-        tickets: num(d.tickets) ?? 0,
-        gross: num(d.gross_revenue_ttc),
-        horsDl: num(d.revenue_hors_dl_ttc),
-        variants: num(d.price_variants) ?? 1,
-        dateCount: num(d.dates_count),
-        priceIds: Array.isArray(d.ticket_price_ids)
-          ? (d.ticket_price_ids as string[])
-          : [],
-        priceMin: num(d.min_price_ttc),
-        priceMax: num(d.max_price_ttc),
-      }),
-    ),
+    items: dims.map(parseDimension),
     officialTickets: num(
       scope.eventId ? event?.canonical_tickets : totals.canonical_tickets,
     ),
@@ -318,11 +360,43 @@ export async function prices(eventId: string, signal: AbortSignal) {
   );
 }
 
-export async function workspaceEvolution(projects:Project[],signal:AbortSignal){
- const {parisDay,observedWeek,sumKnown}=await import('./domain');
- const now=new Date(parisDay()+'T12:00:00Z');now.setUTCDate(now.getUTCDate()-1);const end=now.toISOString().slice(0,10);now.setUTCDate(now.getUTCDate()-6);const start=now.toISOString().slice(0,10);
- const results:Array<{tickets:number;gross:number|null}|null>=Array(projects.length).fill(null);let next=0;
- await Promise.all(Array.from({length:Math.min(4,projects.length)},async()=>{while(next<projects.length){const i=next++;const raw=await rpc('get_project_sales_timeline',{p_project_id:projects[i]!.id,p_as_of_date:parisDay()},signal);results[i]=observedWeek(raw,start,end);}}));
- const comparable=results.filter((r):r is {tickets:number;gross:number|null}=>r!==null);
- return {start,end,projects:projects.length,covered:comparable.length,tickets:comparable.length?comparable.reduce((sum,r)=>sum+r.tickets,0):null,gross:sumKnown(comparable.map(r=>r.gross))};
+export async function workspaceEvolution(
+  projects: Project[],
+  signal: AbortSignal,
+) {
+  const { parisDay, observedWeek, sumKnown } = await import("./domain");
+  const now = new Date(parisDay() + "T12:00:00Z");
+  now.setUTCDate(now.getUTCDate() - 1);
+  const end = now.toISOString().slice(0, 10);
+  now.setUTCDate(now.getUTCDate() - 6);
+  const start = now.toISOString().slice(0, 10);
+  const results: Array<{ tickets: number; gross: number | null } | null> =
+    Array(projects.length).fill(null);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(4, projects.length) }, async () => {
+      while (next < projects.length) {
+        const i = next++;
+        const raw = await rpc(
+          "get_project_sales_timeline",
+          { p_project_id: projects[i]!.id, p_as_of_date: parisDay() },
+          signal,
+        );
+        results[i] = observedWeek(raw, start, end);
+      }
+    }),
+  );
+  const comparable = results.filter(
+    (r): r is { tickets: number; gross: number | null } => r !== null,
+  );
+  return {
+    start,
+    end,
+    projects: projects.length,
+    covered: comparable.length,
+    tickets: comparable.length
+      ? comparable.reduce((sum, r) => sum + r.tickets, 0)
+      : null,
+    gross: sumKnown(comparable.map((r) => r.gross)),
+  };
 }

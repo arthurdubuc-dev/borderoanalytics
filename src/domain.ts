@@ -70,8 +70,8 @@ export function errorMessage(error: unknown): string {
   if (s === "SESSION") return "Ta session a expiré. Reconnecte-toi.";
   if (s === "FORBIDDEN")
     return "Ces données ne sont pas accessibles avec tes droits actuels.";
-  if (s === "BACKEND_UNAVAILABLE")
-    return "Ce résumé financier sera disponible après activation du service mobile.";
+  if (["BACKEND_UNAVAILABLE", "SOURCE_UNAVAILABLE", "TIMEOUT"].includes(s))
+    return "Le service est momentanément indisponible. Réessaie dans un instant.";
   return "Impossible de charger les données. Vérifie ta connexion puis réessaie.";
 }
 export interface Workspace {
@@ -83,6 +83,8 @@ export interface Project {
   name: string;
   season: string | null;
   workspace_id: string;
+  poster_file_id?: string | null;
+  poster_url?: string | null;
 }
 export interface Tour {
   id: string;
@@ -176,10 +178,50 @@ export function filterDates(dates: DateSummary[], scope: Scope): DateSummary[] {
   );
 }
 
-export function observedWeek(raw: unknown, start: string, end: string): {tickets:number;gross:number|null}|null {
- const value=raw as {sales?:{days?:Array<{day:string;tickets:number|null;gross_revenue_ttc?:number|null;span_days:number|null;status:string}>}};
- const days=value?.sales?.days?.filter(d=>d.day>=start&&d.day<=end)??[];
- // A partial interval crossing the window is not assigned entirely to these seven days.
- if(days.length!==7||days.some(d=>typeof d.tickets!=='number'||d.span_days!==1||d.status==='anchor'))return null;
- return {tickets:days.reduce((sum,d)=>sum+d.tickets!,0),gross:sumKnown(days.map(d=>numberOrNull(d.gross_revenue_ttc)))};
+export function observedWeek(
+  raw: unknown,
+  start: string,
+  end: string,
+): { tickets: number; gross: number | null } | null {
+  const value = raw as {
+    sales?: {
+      days?: Array<{
+        day: string;
+        tickets: number | null;
+        gross_revenue_ttc?: number | null;
+        span_days: number | null;
+        status: string;
+      }>;
+    };
+  };
+  const days =
+    value?.sales?.days?.filter((d) => d.day >= start && d.day <= end) ?? [];
+  // A partial interval crossing the window is not assigned entirely to these seven days.
+  if (
+    days.length !== 7 ||
+    days.some(
+      (d) =>
+        typeof d.tickets !== "number" ||
+        d.span_days !== 1 ||
+        d.status === "anchor",
+    )
+  )
+    return null;
+  return {
+    tickets: days.reduce((sum, d) => sum + d.tickets!, 0),
+    gross: sumKnown(days.map((d) => numberOrNull(d.gross_revenue_ttc))),
+  };
+}
+
+export function averagePublicPrice(dates: DateSummary[]): {
+  value: number | null;
+  covered: number;
+} {
+  const covered = dates.filter((d) => d.gross !== null && d.tickets !== null);
+  const tickets = covered.reduce((sum, d) => sum + d.tickets!, 0);
+  return {
+    value:
+      tickets > 0 ? sumKnown(covered.map((d) => d.gross))! / tickets : null,
+    covered: covered.length,
+  };
 }

@@ -1,6 +1,6 @@
 # Bordero Analytics
 
-Application React Native et Expo pour Android et iOS : consultation des ventes et recettes de Bordero Web.
+Application React Native et Expo pour Android et iOS : consultation des ventes et recettes de Bordero Web. Version **1.0.0, Build 1** (affichage **Bordero 1.0**).
 
 ## Tester dans Xcode
 
@@ -9,7 +9,7 @@ Application React Native et Expo pour Android et iOS : consultation des ventes e
 3. Lancer **Run**. Le schéma est configuré en **Release** et embarque le JavaScript : aucun serveur Metro n’est nécessaire.
 4. Se connecter avec son compte Bordero Web.
 
-Identifiants distincts de Roadbook : `io.bordero.dashboard` sur iOS et Android. En cas de demande de signature pour un iPhone physique, choisir son équipe Apple dans **Signing & Capabilities**. Le build simulateur ne nécessite pas de signature.
+Identifiants distincts de Roadbook : `io.bordero.dashboard` sur iOS et Android. En cas de demande de signature pour un iPhone physique, choisir son équipe Apple dans **Signing & Capabilities**. Le simulateur utilise une signature locale ad hoc ; le stockage sécurisé nécessite que la signature reste activée.
 
 ## Installation sur une nouvelle machine
 
@@ -41,11 +41,13 @@ Le build Android Release local utilise la signature de test du projet généré.
 
 - Connexion Bordero existante et changement d’espace de travail.
 - Accueil, projets, tournées et représentations ; filtres de saison et de dates.
-- KPI adaptatifs, abréviations k / M / Md et dépliage animé du chiffre exact.
+- Grilles de KPI adaptatives en portrait et paysage, abréviations k / M / Md et dépliage animé du chiffre exact.
 - Recettes publique TTC, Hors DL TTC, Hors DL + part producteur des DL, et Recette Nette avant commission promoteur.
 - Tarifs et réseaux : classements, recherches, catégories, variantes de prix et écarts au total officiel.
 - Historique observé des ventes ; les mesures sans historique certifié restent indisponibles.
 - Résumés de bordereaux, avec « dont Communication » et plateau seulement si autorisé.
+- Affiches des projets, prix moyen public pondéré, raccourci « À venir » et indication d’actualisation.
+- Reprises des erreurs temporaires, lectures groupées et cache limité à la mémoire du compte/espace courant.
 - Logo fourni conservé dans `assets/logo.png`, modes clair/sombre, prise en charge des grandes polices.
 
 Aucun module Roadbook, équipe, budget ou campagne événementielle dédiée. Les données de production ne sont jamais remplacées par des données de démonstration.
@@ -78,3 +80,5 @@ deno check --config supabase/functions/mobile-dashboard/deno.json supabase/funct
 ```
 
 Voir `docs/RELEASE_TEST.md` pour les vérifications réellement effectuées et les limites du premier build. Les relevés d’audit internes et configurations locales ne sont pas publiés dans ce dépôt.
+
+Les améliorations et leur parcours de vérification sont décrits dans `docs/EVOLUTIONS_1_0.md`.

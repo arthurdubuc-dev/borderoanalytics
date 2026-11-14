@@ -1,8 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { ReadCache, retryRead, isTransient } from "./readPolicy";
+export const ReadContext = createContext<{
+  cache: ReadCache;
+  revision: number;
+} | null>(null);
 export function useResource<T>(
   key: string | null,
   fetcher: (signal: AbortSignal) => Promise<T>,
 ) {
+  const context = useContext(ReadContext);
   const fn = useRef(fetcher);
   fn.current = fetcher;
   const [nonce, setNonce] = useState(0);
@@ -11,28 +24,50 @@ export function useResource<T>(
     data?: T;
     error?: unknown;
     loading: boolean;
+    updatedAt?: number;
   }>({ key: null, loading: false });
   useEffect(() => {
     if (key === null) {
       setState({ key: null, loading: false });
       return;
     }
-    const c = new AbortController();
+    let active = true;
+    const controller = new AbortController();
     setState((previous) =>
       previous.key === key
         ? { ...previous, error: undefined, loading: true }
         : { key, loading: true },
     );
-    fn.current(c.signal).then(
+    const lease = context?.cache.acquire(
+      `${context.revision}:${key}`,
+      (signal) => fn.current(signal),
+      nonce > 0,
+    );
+    const pending =
+      lease?.promise ??
+      retryRead((signal) => fn.current(signal), controller.signal);
+    pending.then(
       (data) => {
-        if (!c.signal.aborted) setState({ key, data, loading: false });
+        if (active)
+          setState({ key, data, loading: false, updatedAt: Date.now() });
       },
       (error) => {
-        if (!c.signal.aborted) setState({ key, error, loading: false });
+        if (active)
+          setState((previous) => ({
+            ...previous,
+            key,
+            data: isTransient(error) ? previous.data : undefined,
+            error,
+            loading: false,
+          }));
       },
     );
-    return () => c.abort();
-  }, [key, nonce]);
+    return () => {
+      active = false;
+      controller.abort();
+      lease?.release();
+    };
+  }, [key, nonce, context?.cache, context?.revision]);
   return {
     ...(state.key === key ? state : { key, loading: key !== null }),
     retry: useCallback(() => setNonce((n) => n + 1), []),

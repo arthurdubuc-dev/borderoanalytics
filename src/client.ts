@@ -1,4 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { createReadTransport } from "./transport";
+import { ReadError } from "./readPolicy";
+import { createClient, processLock } from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -57,6 +59,7 @@ export const supabase = createClient(
   {
     auth: {
       storage,
+      lock: processLock,
       storageKey: "bordero-dashboard-session",
       persistSession: true,
       autoRefreshToken: true,
@@ -64,49 +67,28 @@ export const supabase = createClient(
     },
   },
 );
-export async function request<T>(
-  path: string,
-  signal: AbortSignal,
-  body?: unknown,
-): Promise<T> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) throw new Error("SESSION");
-  const controller = new AbortController();
-  const cancel = () => controller.abort();
-  signal.addEventListener("abort", cancel, { once: true });
-  if (signal.aborted) controller.abort();
-  const timer = setTimeout(cancel, 25000);
-  try {
-    const response = await fetch(url + path, {
-      method: body === undefined ? "GET" : "POST",
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: controller.signal,
-    });
-    if (response.status === 401) {
-      void supabase.auth.signOut({ scope: "local" });
-      throw new Error("SESSION");
+const transport = createReadTransport({
+  url,
+  key,
+  getSession: async () => {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw new ReadError("NETWORK");
+    return data.session;
+  },
+  refreshSession: async () => {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) {
+      if ([400, 401, 403].includes(error.status ?? 0)) return null;
+      throw new ReadError("NETWORK");
     }
-    if (response.status === 403) throw new Error("FORBIDDEN");
-    if (!response.ok)
-      throw new Error(
-        path.includes("mobile-dashboard") &&
-        [404, 503].includes(response.status)
-          ? "BACKEND_UNAVAILABLE"
-          : "NETWORK",
-      );
-    return (await response.json()) as T;
-  } finally {
-    clearTimeout(timer);
-    signal.removeEventListener("abort", cancel);
-  }
-}
+    return data.session;
+  },
+  onInvalidSession: () => {
+    void supabase.auth.signOut({ scope: "local" });
+  },
+});
+export const request = transport.request;
+export const imageRequest = transport.image;
 export function rpc<T>(
   name: string,
   args: Record<string, unknown>,

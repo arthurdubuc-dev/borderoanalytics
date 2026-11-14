@@ -14,6 +14,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import { kpiColumns, sectionPalette } from "./layout";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
   compact,
@@ -301,20 +302,28 @@ export function Field({
     </View>
   );
 }
+const KpiSize = createContext(180);
 export function Kpi({
   label,
   value,
   money = false,
   note,
   hero = false,
+  tone,
+  details,
+  badge,
 }: {
   label: string;
   value: number | null;
   money?: boolean;
   note?: string;
   hero?: boolean;
+  tone?: string;
+  details?: string;
+  badge?: string;
 }) {
   const c = useTheme();
+  const size = useContext(KpiSize);
   const [open, setOpen] = useState(false);
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
@@ -325,10 +334,13 @@ export function Kpi({
     );
     return () => sub.remove();
   }, []);
+  const palette = tone ? sectionPalette(tone, c.bg === "#0B0D10") : null;
+  const foreground = hero ? "#171B22" : (palette?.text ?? c.text);
+  const muted = hero ? "#464315" : (palette?.text ?? c.muted);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${label}. ${exact(value, money)}. ${open ? "Replier" : "Afficher le chiffre exact"}`}
+      accessibilityLabel={`${label}. ${exact(value, money)}. ${note ?? ""}. ${open ? "Replier" : "Afficher le chiffre exact"}`}
       accessibilityState={{ expanded: open, disabled: value === null }}
       disabled={value === null}
       onPress={() => {
@@ -337,59 +349,67 @@ export function Kpi({
         setOpen((v) => !v);
       }}
       style={({ pressed }) => ({
-        borderRadius: 22,
-        padding: 22,
+        borderRadius: 20,
+        padding: 16,
         borderWidth: 1,
-        borderColor: hero ? c.accent : c.line,
-        backgroundColor: hero ? c.accent : c.surface,
-        opacity: pressed ? 0.85 : 1,
-        gap: 12,
-        flex: 1,
+        borderColor: hero ? c.accent : (palette?.border ?? c.line),
+        backgroundColor: hero ? c.accent : (palette?.background ?? c.surface),
+        opacity: pressed ? 0.82 : 1,
+        gap: 8,
+        minHeight: Math.min(size, 240),
+        justifyContent: "space-between",
       })}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 10,
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-        }}
-      >
-        <Txt
-          style={{
-            color: hero ? "#35330E" : c.muted,
-            fontSize: 13,
-            lineHeight: 19,
-            flex: 1,
-            fontWeight: "600",
-          }}
-        >
-          {label}
-        </Txt>
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+        <View style={{ flex: 1, gap: 5 }}>
+          {badge && (
+            <Txt
+              style={{
+                fontWeight: "700",
+                fontSize: 10,
+                lineHeight: 13,
+                color: muted,
+              }}
+            >
+              {badge}
+            </Txt>
+          )}
+          <Txt
+            style={{
+              fontSize: 12,
+              lineHeight: 17,
+              fontWeight: "600",
+              color: muted,
+              minHeight: 34,
+            }}
+          >
+            {label}
+          </Txt>
+        </View>
         <Icon
           name={open ? "chevron-up" : "chevron-down"}
-          size={17}
-          color={hero ? "#171B22" : c.muted}
+          size={15}
+          color={muted}
         />
       </View>
       <Txt
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
         style={{
-          fontSize: 42,
-          lineHeight: 51,
+          fontSize: size < 180 ? 30 : 36,
+          lineHeight: size < 180 ? 38 : 44,
           fontWeight: "700",
-          letterSpacing: -1.8,
-          color: hero ? "#171B22" : c.text,
+          letterSpacing: -1.2,
+          color: foreground,
         }}
       >
         {compact(value, money)}
       </Txt>
       {note && (
         <Txt
-          style={{
-            fontSize: 12,
-            lineHeight: 18,
-            color: hero ? "#464315" : c.muted,
-          }}
+          numberOfLines={open ? undefined : 2}
+          style={{ fontSize: 11, lineHeight: 16, color: muted }}
         >
           {note}
         </Txt>
@@ -398,25 +418,30 @@ export function Kpi({
         <View
           style={{
             borderTopWidth: 1,
-            borderTopColor: hero ? "#D8C940" : c.line,
-            paddingTop: 12,
-            gap: 3,
+            borderTopColor: hero ? "#D8C940" : (palette?.border ?? c.line),
+            paddingTop: 10,
+            gap: 5,
           }}
         >
-          <Txt style={{ fontSize: 11, color: hero ? "#464315" : c.muted }}>
+          <Txt style={{ fontSize: 10, lineHeight: 14, color: muted }}>
             CHIFFRE EXACT
           </Txt>
           <Txt
             selectable
             style={{
-              fontSize: 21,
-              lineHeight: 29,
+              fontSize: 18,
+              lineHeight: 25,
               fontWeight: "700",
-              color: hero ? "#171B22" : c.text,
+              color: foreground,
             }}
           >
             {exact(value, money)}
           </Txt>
+          {details && (
+            <Txt style={{ fontSize: 11, lineHeight: 17, color: muted }}>
+              {details}
+            </Txt>
+          )}
         </View>
       )}
     </Pressable>
@@ -424,15 +449,107 @@ export function Kpi({
 }
 export function KpiGrid({ children }: { children: React.ReactNode }) {
   const { width, fontScale } = useWindowDimensions();
+  const [measured, setMeasured] = useState<number | null>(null);
+  const items = React.Children.toArray(children);
+  const available = measured ?? Math.min(width - 40, 1080);
+  const columns = kpiColumns(available, fontScale, items.length);
+  const tile = (available - 12 * (columns - 1)) / columns;
   return (
     <View
+      onLayout={(event) => setMeasured(event.nativeEvent.layout.width)}
       style={{
-        flexDirection: width < 460 || fontScale > 1.2 ? "column" : "row",
-        gap: 14,
-        alignItems: "stretch",
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 12,
+        alignItems: "flex-start",
       }}
     >
-      {children}
+      {items.map((child, i) => (
+        <View
+          key={(React.isValidElement(child) ? child.key : null) ?? i}
+          style={{ width: tile, minWidth: 0 }}
+        >
+          <KpiSize.Provider value={tile}>{child}</KpiSize.Provider>
+        </View>
+      ))}
+    </View>
+  );
+}
+export function ProjectCard({
+  project,
+  subtitle,
+  right,
+  onPress,
+  artwork,
+}: {
+  project: { name: string };
+  subtitle?: string;
+  right?: string;
+  onPress: () => void;
+  artwork: React.ReactNode;
+}) {
+  const c = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: c.line,
+        backgroundColor: pressed ? c.secondary : c.surface,
+        padding: 14,
+        flexDirection: "row",
+        gap: 15,
+        alignItems: "center",
+      })}
+    >
+      {artwork}
+      <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
+        <Txt style={{ fontSize: 17, lineHeight: 23, fontWeight: "700" }}>
+          {project.name}
+        </Txt>
+        {subtitle && (
+          <Txt muted style={{ fontSize: 12, lineHeight: 18 }}>
+            {subtitle}
+          </Txt>
+        )}
+        {right && (
+          <Txt style={{ fontSize: 14, lineHeight: 21, fontWeight: "700" }}>
+            {right}
+          </Txt>
+        )}
+      </View>
+      <Icon name="chevron-forward" size={17} color={c.muted} />
+    </Pressable>
+  );
+}
+export function UpdatedNote({
+  loading,
+  error,
+  updatedAt,
+}: {
+  loading: boolean;
+  error?: unknown;
+  updatedAt?: number;
+}) {
+  const c = useTheme();
+  return (
+    <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+      {loading && <ActivityIndicator size="small" color={c.muted} />}
+      <Txt muted style={{ fontSize: 11, lineHeight: 17 }}>
+        {loading
+          ? "Actualisation…"
+          : error
+            ? "Actualisation impossible · dernière lecture conservée"
+            : updatedAt
+              ? "Consulté à " +
+                new Intl.DateTimeFormat("fr-FR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(updatedAt))
+              : ""}
+      </Txt>
     </View>
   );
 }

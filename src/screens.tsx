@@ -28,8 +28,12 @@ import {
 } from "@react-navigation/native-stack";
 import { supabase } from "./client";
 import * as api from "./api";
-import { useResource } from "./useResource";
+import { useResource, ReadContext } from "./useResource";
+import { ReadCache } from "./readPolicy";
+import { release } from "./release";
+import { ProjectArtwork } from "./ProjectArtwork";
 import {
+  averagePublicPrice,
   compact,
   dayLabel,
   exact,
@@ -61,6 +65,8 @@ import {
   Field,
   Kpi,
   KpiGrid,
+  ProjectCard,
+  UpdatedNote,
   RowButton,
   TrendChart,
   pageStyle,
@@ -87,6 +93,8 @@ type ContextValue = {
   setMode: (m: RevenueMode) => void;
   retry: () => void;
   refreshing: boolean;
+  refreshedAt?: number;
+  refreshError?: unknown;
   from: string;
   to: string;
   season: string;
@@ -115,8 +123,9 @@ function scopeFor(ctx: ContextValue, extra: Partial<Scope> = {}): Scope {
   };
 }
 function useScopedFinance(scope: Scope, enabled = true) {
-  return useResource(enabled ? "finance:" + JSON.stringify(scope) : null, (signal) =>
-    api.financials(scope, signal),
+  return useResource(
+    enabled ? "finance:" + JSON.stringify(scope) : null,
+    (signal) => api.financials(scope, signal),
   );
 }
 function displayedRevenue(
@@ -251,11 +260,20 @@ function ModeSelector() {
     </>
   );
 }
-function Summary({ scope, finance: providedFinance }: { scope: Scope; finance?: ReturnType<typeof useScopedFinance> }) {
+function Summary({
+  scope,
+  finance: providedFinance,
+}: {
+  scope: Scope;
+  finance?: ReturnType<typeof useScopedFinance>;
+}) {
   const ctx = useDashboard();
   const selected = datesInScope(scope, ctx);
   const valid = selected.filter(api.eligible);
-  const ownFinance = useScopedFinance(scope, !providedFinance && (ctx.mode === "net" || ctx.mode === "producerDl"));
+  const ownFinance = useScopedFinance(
+    scope,
+    !providedFinance && (ctx.mode === "net" || ctx.mode === "producerDl"),
+  );
   const finance = providedFinance ?? ownFinance;
   const revenues = valid.map((d) =>
     displayedRevenue(d, ctx.mode, finance.data),
@@ -267,6 +285,7 @@ function Summary({ scope, finance: providedFinance }: { scope: Scope; finance?: 
   const amount = sumKnown(known);
   const tickets = sold.length ? sold.reduce((s, v) => s + v, 0) : null;
   const missing = valid.length - known.length;
+  const average = averagePublicPrice(valid);
   const last = valid
     .map((d) => d.updatedAt)
     .filter((s): s is string => !!s)
@@ -288,7 +307,7 @@ function Summary({ scope, finance: providedFinance }: { scope: Scope; finance?: 
       <KpiGrid>
         <Kpi
           hero
-          label={REVENUE_MODES.find((m) => m.key === ctx.mode)!.label}
+          label={REVENUE_MODES.find((m) => m.key === ctx.mode)!.short}
           value={amount}
           money
           note={
@@ -302,6 +321,19 @@ function Summary({ scope, finance: providedFinance }: { scope: Scope; finance?: 
           value={tickets}
           note={`${sold.length}/${valid.length} dates renseignées · appuyer pour le détail`}
         />
+        <Kpi
+          label="Prix moyen public TTC"
+          value={average.value}
+          money
+          note={`${average.covered}/${valid.length} dates comparables`}
+          details="Recette publique TTC divisée par les billets du même périmètre. Les tarifs à prix nul sont inclus."
+        />
+        <Kpi
+          label="Dates billetterie"
+          value={valid.length}
+          note={`${selected.length - valid.length} dates exclues du résumé`}
+          details="Les dates annulées, reportées, options et cessions restent exclues des indicateurs commerciaux."
+        />
       </KpiGrid>
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
         <Txt muted style={{ fontSize: 12 }}>
@@ -312,12 +344,23 @@ function Summary({ scope, finance: providedFinance }: { scope: Scope; finance?: 
           · {sourceNote}
         </Txt>
       </View>
-      {(ctx.mode === "net" || ctx.mode === "producerDl") && finance.loading && (
-        <Loading />
-      )}
-      {(ctx.mode === "net" || ctx.mode === "producerDl") && finance.error && (
-        <ErrorState error={finance.error} retry={finance.retry} />
-      )}
+      {(ctx.mode === "net" || ctx.mode === "producerDl") &&
+        finance.loading &&
+        !finance.data && <Loading />}
+      {(ctx.mode === "net" || ctx.mode === "producerDl") &&
+        finance.error &&
+        !finance.data && (
+          <ErrorState error={finance.error} retry={finance.retry} />
+        )}
+      {(ctx.mode === "net" || ctx.mode === "producerDl") &&
+        finance.data &&
+        !!finance.error && (
+          <UpdatedNote
+            loading={false}
+            error={finance.error}
+            updatedAt={finance.updatedAt}
+          />
+        )}
       <Notice>
         Les dates annulées, reportées, options et cessions sont exclues des
         totaux. Les billets transférés lors d’un report ne sont jamais comptés
@@ -389,9 +432,16 @@ function Evolution({ scope }: { scope: Scope }) {
               </Pressable>
             ))}
           </View>
-          {timeline.loading ? (
+          {timeline.data && !!timeline.error && (
+            <UpdatedNote
+              loading={false}
+              error={timeline.error}
+              updatedAt={timeline.updatedAt}
+            />
+          )}
+          {timeline.loading && !timeline.data ? (
             <Loading />
-          ) : timeline.error ? (
+          ) : timeline.error && !timeline.data ? (
             <ErrorState error={timeline.error} retry={timeline.retry} />
           ) : (
             <>
@@ -426,7 +476,9 @@ function DatesList({
   const ctx = useDashboard();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"date" | "sales">("date");
+  const [when, setWhen] = useState<"all" | "upcoming">("all");
   const selected = datesInScope(scope, ctx)
+    .filter((d) => when === "all" || d.day >= parisDay())
     .filter((d) =>
       `${d.name} ${d.city ?? ""} ${d.venue ?? ""}`
         .toLocaleLowerCase("fr")
@@ -460,6 +512,18 @@ function DatesList({
             name={sort === "sales" ? "trending-up-outline" : "calendar-outline"}
           />
         </Pressable>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <Button
+          title="Toutes les dates"
+          secondary={when !== "all"}
+          onPress={() => setWhen("all")}
+        />
+        <Button
+          title="À venir"
+          secondary={when !== "upcoming"}
+          onPress={() => setWhen("upcoming")}
+        />
       </View>
       {selected.length === 0 ? (
         <Empty />
@@ -500,7 +564,13 @@ function Tariffs({
     scope.projectId && scope.tourId !== null
       ? "breakdown:" + kind + JSON.stringify(scope)
       : null,
-    (s) => api.breakdown(scope, kind, s),
+    (s) =>
+      api.breakdown(
+        scope,
+        kind,
+        s,
+        ctx.dates.find((d) => d.id === scope.eventId)?.day,
+      ),
   );
   const [sort, setSort] = useState<"tickets" | "gross">("tickets");
   const [query, setQuery] = useState("");
@@ -542,15 +612,22 @@ function Tariffs({
             : "Répartition des ventes enregistrées"
         }
       />
+      {data.data && !!data.error && (
+        <UpdatedNote
+          loading={false}
+          error={data.error}
+          updatedAt={data.updatedAt}
+        />
+      )}
       {!scope.projectId ? (
         <Notice>Choisis un projet pour analyser ses tarifs et réseaux.</Notice>
       ) : scope.tourId === null ? (
         <Notice>
           Consulte les tarifs date par date pour les dates hors tournée.
         </Notice>
-      ) : data.loading ? (
+      ) : data.loading && !data.data ? (
         <Loading />
-      ) : data.error ? (
+      ) : data.error && !data.data ? (
         <ErrorState error={data.error} retry={data.retry} />
       ) : (
         <>
@@ -771,9 +848,16 @@ function DateScreen({
           title="Grille tarifaire"
           subtitle="Tarifs configurés, y compris sans vente ventilée"
         />
-        {grid.loading ? (
+        {grid.data && !!grid.error && (
+          <UpdatedNote
+            loading={false}
+            error={grid.error}
+            updatedAt={grid.updatedAt}
+          />
+        )}
+        {grid.loading && !grid.data ? (
           <Loading />
-        ) : grid.error ? (
+        ) : grid.error && !grid.data ? (
           <ErrorState error={grid.error} retry={grid.retry} />
         ) : grid.data?.length ? (
           grid.data.map((p) => {
@@ -801,34 +885,45 @@ function DateScreen({
           title="Bordereau"
           subtitle="Résumés des tableaux · consultation uniquement"
         />
-        {finance.loading ? (
+        {finance.loading && !finance.data ? (
           <Loading />
-        ) : finance.error ? (
+        ) : finance.error && !finance.data ? (
           <ErrorState error={finance.error} retry={finance.retry} />
         ) : finance.data?.find((f) => f.eventId === date.id) ? (
           <>
-            {finance.data
-              .find((f) => f.eventId === date.id)!
-              .sections.map((s) => (
-                <View key={s.key} style={{ paddingVertical: 10, gap: 4 }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 10,
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <Txt style={{ flex: 1, fontWeight: "600" }}>{s.label}</Txt>
-                    <Txt style={{ fontWeight: "700" }}>
-                      {exact(s.amount, true)}
-                    </Txt>
-                  </View>
-                  <Txt muted style={{ fontSize: 11 }}>
-                    {s.basis}
-                    {s.note ? " · " + s.note : ""}
-                  </Txt>
-                </View>
-              ))}
+            <KpiGrid>
+              {finance.data
+                .find((f) => f.eventId === date.id)!
+                .sections.map((section) => (
+                  <Kpi
+                    key={section.key}
+                    tone={section.key}
+                    badge={
+                      ["A", "B", "C", "D", "E"].includes(section.key)
+                        ? section.key
+                        : undefined
+                    }
+                    label={section.label}
+                    value={section.amount}
+                    money
+                    note={
+                      section.key === "P"
+                        ? "Incluse dans Marketing"
+                        : section.amount === null
+                          ? "Donnée indisponible"
+                          : "Appuyer pour le détail"
+                    }
+                    details={[section.basis, section.note]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  />
+                ))}
+            </KpiGrid>
+            <UpdatedNote
+              loading={finance.loading}
+              error={finance.error}
+              updatedAt={finance.updatedAt}
+            />
             {finance.data
               .find((f) => f.eventId === date.id)!
               .warnings.map((w) => (
@@ -861,10 +956,43 @@ function ProjectScreen({
       : p?.name;
   return (
     <Page>
-      <Heading
-        title={title ?? "Projet"}
-        subtitle={p?.season ?? "Tableau de bord du projet"}
-      />
+      {p && (
+        <View
+          style={{
+            backgroundColor: "#171B22",
+            borderRadius: 24,
+            padding: 20,
+            flexDirection: "row",
+            gap: 18,
+            alignItems: "center",
+          }}
+        >
+          <ProjectArtwork project={p} width={88} height={120} />
+          <View style={{ flex: 1, gap: 7 }}>
+            <Txt style={{ fontSize: 11, color: "#FFEE57", fontWeight: "700" }}>
+              PROJET · {p.season ?? "BORDERO"}
+            </Txt>
+            <Txt
+              accessibilityRole="header"
+              style={{
+                fontSize: 25,
+                lineHeight: 32,
+                fontWeight: "700",
+                color: "#FFFFFF",
+              }}
+            >
+              {title ?? p.name}
+            </Txt>
+            {title !== p.name && (
+              <Txt style={{ fontSize: 14, color: "#CCD0D5" }}>{p.name}</Txt>
+            )}
+            <Txt style={{ fontSize: 12, color: "#CCD0D5" }}>
+              {datesInScope(scope, ctx).length} représentations dans le
+              périmètre
+            </Txt>
+          </View>
+        </View>
+      )}
       {route.params.tourId === undefined && (
         <View style={{ gap: 9 }}>
           {ctx.catalog.tours
@@ -927,18 +1055,11 @@ function TariffScreen({
   const resource = useResource(
     "tariff-events:" + JSON.stringify(scope) + route.params.key,
     async (signal) => {
-      const result: Array<{ date: DateSummary; dimension: Dimension }> = [];
-      for (const date of dateList) {
-        if (signal.aborted) break;
-        const b = await api.breakdown(
-          { ...scope, eventId: date.id },
-          "tariff",
-          signal,
-        );
-        const dimension = b.items.find((d) => d.key === route.params.key);
-        if (dimension) result.push({ date, dimension });
-      }
-      return result;
+      const rows = await api.tariffEvents(scope, route.params.key, signal);
+      return rows.flatMap((row) => {
+        const date = dateList.find((d) => d.id === row.eventId);
+        return date ? [{ date, dimension: row.dimension }] : [];
+      });
     },
   );
   return (
@@ -951,9 +1072,16 @@ function TariffScreen({
         Les dates et variantes de prix sont détaillées ci-dessous. Les montants
         affichés sont les recettes publiques TTC ventilées.
       </Notice>
-      {resource.loading ? (
+      {resource.data && !!resource.error && (
+        <UpdatedNote
+          loading={false}
+          error={resource.error}
+          updatedAt={resource.updatedAt}
+        />
+      )}
+      {resource.loading && !resource.data ? (
         <Loading />
-      ) : resource.error ? (
+      ) : resource.error && !resource.data ? (
         <ErrorState error={resource.error} retry={resource.retry} />
       ) : resource.data?.length ? (
         resource.data.map(({ date, dimension }) => (
@@ -986,6 +1114,11 @@ function Page({ children }: { children: React.ReactNode }) {
         />
       }
     >
+      <UpdatedNote
+        loading={ctx.refreshing}
+        error={ctx.refreshError}
+        updatedAt={ctx.refreshedAt}
+      />
       {children}
     </ScrollView>
   );
@@ -1064,11 +1197,53 @@ function FilterSheet({
   );
 }
 function WorkspaceEvolution() {
-  const ctx=useDashboard();
-  const projects=ctx.catalog.projects.filter(p=>!ctx.season||p.season===ctx.season);
-  const data=useResource(!ctx.from&&!ctx.to?'workspace-evolution:'+ctx.workspace.id+projects.map(p=>p.id).join(','):null,signal=>api.workspaceEvolution(projects,signal));
-  if(ctx.from||ctx.to)return null;
-  return <Card><Heading title="Dynamique · 7 jours" subtitle="Variations observées sur les derniers jours complets"/>{data.loading?<Loading/>:data.error?<ErrorState error={data.error} retry={data.retry}/>:data.data?<><Txt style={{fontSize:28,lineHeight:36,fontWeight:'700'}}>{exact(data.data.tickets)} billets</Txt><Txt muted>{dayLabel(data.data.start,true)} – {dayLabel(data.data.end,true)} · {data.data.covered}/{data.data.projects} projets comparables</Txt>{data.data.covered<data.data.projects&&<Notice>Ce sous-total couvre les projets dont les sept observations journalières sont complètes. Les imports couvrant plusieurs jours et les périodes incomplètes sont exclus.</Notice>}<Txt muted style={{fontSize:11,lineHeight:17}}>Une variation observée peut inclure une correction de stock. Elle ne représente pas forcément les achats effectués chaque jour.</Txt></>:null}</Card>;
+  const ctx = useDashboard();
+  const projects = ctx.catalog.projects.filter(
+    (p) => !ctx.season || p.season === ctx.season,
+  );
+  const data = useResource(
+    !ctx.from && !ctx.to
+      ? "workspace-evolution:" +
+          ctx.workspace.id +
+          projects.map((p) => p.id).join(",")
+      : null,
+    (signal) => api.workspaceEvolution(projects, signal),
+  );
+  if (ctx.from || ctx.to) return null;
+  return (
+    <Card>
+      <Heading
+        title="Dynamique · 7 jours"
+        subtitle="Variations observées sur les derniers jours complets"
+      />
+      {data.loading ? (
+        <Loading />
+      ) : data.error ? (
+        <ErrorState error={data.error} retry={data.retry} />
+      ) : data.data ? (
+        <>
+          <Txt style={{ fontSize: 28, lineHeight: 36, fontWeight: "700" }}>
+            {exact(data.data.tickets)} billets
+          </Txt>
+          <Txt muted>
+            {dayLabel(data.data.start, true)} – {dayLabel(data.data.end, true)}{" "}
+            · {data.data.covered}/{data.data.projects} projets comparables
+          </Txt>
+          {data.data.covered < data.data.projects && (
+            <Notice>
+              Ce sous-total couvre les projets dont les sept observations
+              journalières sont complètes. Les imports couvrant plusieurs jours
+              et les périodes incomplètes sont exclus.
+            </Notice>
+          )}
+          <Txt muted style={{ fontSize: 11, lineHeight: 17 }}>
+            Une variation observée peut inclure une correction de stock. Elle ne
+            représente pas forcément les achats effectués chaque jour.
+          </Txt>
+        </>
+      ) : null}
+    </Card>
+  );
 }
 function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
   const ctx = useDashboard();
@@ -1087,10 +1262,12 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Page>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Heading
-            title={tab === "Accueil" ? "Vue d’ensemble" : tab}
-            subtitle={ctx.workspace.name}
-          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Heading
+              title={tab === "Accueil" ? "Vue d’ensemble" : tab}
+              subtitle={ctx.workspace.name}
+            />
+          </View>
           <Pressable
             accessibilityLabel="Filtrer les représentations"
             accessibilityRole="button"
@@ -1135,9 +1312,10 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
                   ctx,
                 ).filter(api.eligible);
                 return (
-                  <RowButton
+                  <ProjectCard
                     key={p.id}
-                    title={p.name}
+                    project={p}
+                    artwork={<ProjectArtwork project={p} />}
                     subtitle={`${p.season ?? "Projet"} · ${d.length} dates`}
                     right={
                       compact(sumKnown(d.map((d) => d.tickets))) + " billets"
@@ -1172,9 +1350,10 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
               placeholder="Spectacle, artiste…"
             />
             {visibleProjects.map((p) => (
-              <RowButton
+              <ProjectCard
                 key={p.id}
-                title={p.name}
+                project={p}
+                artwork={<ProjectArtwork project={p} />}
                 subtitle={p.season ?? undefined}
                 onPress={() => navigation.navigate("Project", { id: p.id })}
               />
@@ -1219,9 +1398,10 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
               </>
             ) : (
               visibleProjects.map((p) => (
-                <RowButton
+                <ProjectCard
                   key={p.id}
-                  title={p.name}
+                  project={p}
+                  artwork={<ProjectArtwork project={p} />}
                   subtitle="Tarifs, réseaux et évolution"
                   onPress={() => setAnalysisProject(p.id)}
                 />
@@ -1289,6 +1469,8 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
 export function Dashboard({ userEmail }: { userEmail: string }) {
   const c = useTheme();
   const [ws, setWs] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+
   const [mode, setMode] = useState<RevenueMode>("gross");
   const [picker, setPicker] = useState(false);
   const [account, setAccount] = useState(false);
@@ -1296,6 +1478,8 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
   const workspaces = useResource("bootstrap", api.bootstrap);
   const workspace =
     workspaces.data?.find((w) => w.id === ws) ?? workspaces.data?.[0];
+  const cache = useMemo(() => new ReadCache(), [workspace?.id]);
+  useEffect(() => () => cache.clear(), [cache]);
   const cat = useResource(workspace ? "catalog:" + workspace.id : null, (s) =>
     api.catalog(workspace!.id, s),
   );
@@ -1314,7 +1498,7 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
     return () => listener.remove();
   }, [workspaces.retry]);
   const retry = () => {
-    workspaces.retry();
+    setRevision((n) => n + 1);
     cat.retry();
     dates.retry();
   };
@@ -1328,6 +1512,8 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
           setMode,
           retry,
           refreshing: cat.loading || dates.loading,
+          refreshedAt: dates.updatedAt,
+          refreshError: dates.error ?? cat.error,
           ...filters,
           setFilters,
         }
@@ -1398,15 +1584,15 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
         </Pressable>
       </View>
       <View style={{ flex: 1, backgroundColor: c.bg }}>
-        {workspaces.loading ||
+        {(!workspaces.data && workspaces.loading) ||
         (!cat.data && cat.loading) ||
         (!dates.data && dates.loading) ? (
           <Loading />
-        ) : workspaces.error ? (
+        ) : workspaces.error && !workspaces.data ? (
           <ErrorState error={workspaces.error} retry={workspaces.retry} />
-        ) : cat.error ? (
+        ) : cat.error && !cat.data ? (
           <ErrorState error={cat.error} retry={cat.retry} />
-        ) : dates.error ? (
+        ) : dates.error && !dates.data ? (
           <ErrorState error={dates.error} retry={dates.retry} />
         ) : !workspace ? (
           <Empty
@@ -1415,55 +1601,81 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
           />
         ) : value ? (
           <Context.Provider value={value}>
-            <NavigationContainer
-              key={workspace.id + JSON.stringify(filters)}
-              theme={{
-                ...(c.bg === "#0B0D10" ? DarkTheme : DefaultTheme),
-                colors: {
-                  ...(c.bg === "#0B0D10" ? DarkTheme : DefaultTheme).colors,
-                  background: c.bg,
-                  card: c.surface,
-                  text: c.text,
-                  border: c.line,
-                  primary: c.text,
-                },
-              }}
-            >
-              <Stack.Navigator
-                screenOptions={{
-                  headerStyle: { backgroundColor: c.bg },
-                  headerTintColor: c.text,
-                  headerTitleStyle: { fontFamily: "DMSans", fontWeight: "600" },
-                  headerBackTitle: "Retour",
-                  contentStyle: { backgroundColor: c.bg },
+            <ReadContext.Provider value={{ cache, revision }}>
+              <NavigationContainer
+                key={workspace.id + JSON.stringify(filters)}
+                theme={{
+                  ...(c.bg === "#0B0D10" ? DarkTheme : DefaultTheme),
+                  colors: {
+                    ...(c.bg === "#0B0D10" ? DarkTheme : DefaultTheme).colors,
+                    background: c.bg,
+                    card: c.surface,
+                    text: c.text,
+                    border: c.line,
+                    primary: c.text,
+                  },
                 }}
               >
-                <Stack.Screen
-                  name="Main"
-                  component={MainScreen}
-                  options={{ headerShown: false }}
-                />
-                <Stack.Screen
-                  name="Project"
-                  component={ProjectScreen}
-                  options={{ title: "Projet & tournée" }}
-                />
-                <Stack.Screen
-                  name="Date"
-                  component={DateScreen}
-                  options={{ title: "Représentation" }}
-                />
-                <Stack.Screen
-                  name="Tariff"
-                  component={TariffScreen}
-                  options={{ title: "Tarif · détail" }}
-                />
-              </Stack.Navigator>
-            </NavigationContainer>
+                <Stack.Navigator
+                  screenOptions={{
+                    headerStyle: { backgroundColor: c.bg },
+                    headerTintColor: c.text,
+                    headerTitleStyle: {
+                      fontFamily: "DMSans",
+                      fontWeight: "600",
+                    },
+                    headerBackTitle: "Retour",
+                    contentStyle: { backgroundColor: c.bg },
+                  }}
+                >
+                  <Stack.Screen
+                    name="Main"
+                    component={MainScreen}
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="Project"
+                    component={ProjectScreen}
+                    options={{ title: "Projet & tournée" }}
+                  />
+                  <Stack.Screen
+                    name="Date"
+                    component={DateScreen}
+                    options={{ title: "Représentation" }}
+                  />
+                  <Stack.Screen
+                    name="Tariff"
+                    component={TariffScreen}
+                    options={{ title: "Tarif · détail" }}
+                  />
+                </Stack.Navigator>
+              </NavigationContainer>
+            </ReadContext.Provider>
           </Context.Provider>
         ) : (
           <Loading />
         )}
+        {workspaces.data &&
+          (workspaces.loading || Boolean(workspaces.error)) && (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: c.bg,
+                justifyContent: "center",
+                padding: 20,
+              }}
+            >
+              {workspaces.loading ? (
+                <Loading />
+              ) : (
+                <ErrorState error={workspaces.error} retry={workspaces.retry} />
+              )}
+            </View>
+          )}
       </View>
       <Sheet
         visible={picker}
@@ -1490,7 +1702,8 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
       >
         <Txt>{userEmail}</Txt>
         <Notice>
-          Bordero · version 0.1.0 · consultation des ventes et recettes.
+          Bordero {release.displayVersion} · Build {release.build} ·
+          consultation des ventes et recettes.
         </Notice>
         <Button
           title="Se déconnecter"
