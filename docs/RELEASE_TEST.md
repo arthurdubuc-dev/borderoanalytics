@@ -4,7 +4,7 @@ Application distincte de Roadbook, identifiant `io.bordero.dashboard`. Xcode Run
 
 ## Vérifications réussies
 
-- TypeScript et 64 tests automatisés ; contrôle Deno de la fonction serveur.
+- TypeScript et 67 tests automatisés ; contrôle Deno de la fonction serveur.
 - Compilation Release iPhone physique, simulateur iOS et Android. L’APK Android local conserve la signature de test, sans publication Play Store.
 - Installation sur l’iPhone physique et ouverture avec sa session normale : tableau de bord avec chiffres confirmé par l’utilisateur ; lecture financière réussie constatée dans les journaux du service.
 - Menu inférieur en superposition transparente vérifié dans un aperçu natif distinct : le contenu reste visible autour de la capsule. Espacement de fin de page calculé depuis la hauteur réelle du menu.
@@ -26,3 +26,16 @@ Voir `CHARGEMENTS_RECETTES.md` pour le fonctionnement et les limites. Aucune gar
 Actualiser le tableau de bord, vérifier Hors DL + part producteur des DL et Nette, puis comparer les chiffres exacts au Web. Tester changement d’espace, déconnexion, retour depuis l’arrière-plan, portrait/paysage et grandes polices.
 
 Une source incomplète, une continuité non résolue ou des DL hérités non certifiés restent indisponibles et signalés. Les coûts ne sont pas renommés arbitrairement HT, Communication reste incluse dans Marketing et le plateau reste protégé par les droits. Aucun résultat ne permet d’inférer un plateau masqué.
+
+
+## Camembert des billetteries et seconde optimisation
+
+La page projet/tournée et la date présentent un anneau animé des billets ventilés par billetterie. Le toucher d’une part ou d’une ligne de légende affiche son nom, le nombre exact de billets et son pourcentage. Le survol souris/stylet est prévu sur les parts et la légende. La première billetterie est indiquée en volume, sans déduire une rentabilité des billets seuls.
+
+Le graphique utilise toutes les billetteries reçues, indépendamment du tri ou de la recherche du détail. Les parts concernent les billets ventilés ; les avertissements de ventilation partielle ou tronquée restent visibles. Les volumes invalides ou négatifs empêchent le graphique et renvoient vers le détail, sans remplacer les valeurs par zéro. La légende est accessible, le graphique s’adapte à sa largeur et respecte Réduire les animations.
+
+Rendu iOS vérifié dans un aperçu natif isolé avec données explicitement synthétiques. TypeScript et 67 tests réussis, dont les cas sans vente, mono-billetterie, doublons, volumes invalides et sélection géométrique. La validation tactile/survol complète avec les données réelles reste à effectuer sur l’appareil. La version Release reste 1.0.0 Build 1.
+
+La seconde optimisation de recette supprime une jointure redondante aux tarifs. Ses permissions ont été vérifiées sur la base déployée ; le nouveau temps connecté reste à mesurer. L’installation iPhone est réalisée ; son verrouillage a empêché le lancement automatique pour cette mesure.
+
+Les trois compilations finales Release (iPhone physique, simulateur et Android) ont réussi avec le nouveau composant SVG. L’aperçu synthétique a été retiré du simulateur, puis remplacé par l’application réelle. Les fichiers de test sont exclus de Git et des versions livrées.

@@ -40,3 +40,12 @@ La migration `20261114192730_mobile_dashboard_scope_predicate_pushdown.sql` appl
 Le plan SQL comparé, avec des identifiants synthétiques et sans lecture de données financières, confirme que la sélection directe utilise les index des dates au lieu de balayer les tables de ventes, tarifs et observations. La sélection a aussi été vérifiée avec un plan préparé générique : les index restent utilisés. La vérification connectée ultérieure a confirmé deux réponses réussies sans erreur sur ces deux lectures, en 5,9 et 6,4 secondes, soit environ trois fois plus vite que la mesure de référence.
 
 Cette correction est côté serveur : aucune nouvelle installation mobile n’est nécessaire. Les 64 tests applicatifs restent réussis et les permissions des fonctions sont inchangées.
+
+
+## Deuxième optimisation : projection de la source officielle
+
+La migration `20261114211413_mobile_dashboard_source_metadata_projection.sql` est appliquée. La sélection de la source officielle lit désormais uniquement son identifiant et son type. Son montant TTC est réutilisé depuis `historical_gross_ttc`, déjà calculé par la lecture économique sécurisée du Web, dans le même instantané SQL. Cela supprime la seconde jointure aux tarifs pour recalculer un montant identique.
+
+Le plan de cette sélection de métadonnées ne contient plus la table des tarifs. Les filtres explicites sur les dates et l’espace, les capacités et les RLS restent en place. La fonction reste STABLE, SECURITY INVOKER, avec search_path vide ; l’exécution anonyme est refusée. Aucune formule financière, donnée métier ou politique d’accès n’est modifiée.
+
+Les 67 tests et TypeScript passent après cette évolution. Le gain de temps après cette deuxième optimisation reste à mesurer avec la session normale du téléphone ; les 5,9 à 6,4 secondes ci-dessus sont la référence AVANT cette migration. Ne pas les présenter comme une mesure de la nouvelle version.

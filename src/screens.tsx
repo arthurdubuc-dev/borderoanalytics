@@ -32,6 +32,7 @@ import { useResource, ReadContext } from "./useResource";
 import { ReadCache } from "./readPolicy";
 import { release } from "./release";
 import { ProjectArtwork } from "./ProjectArtwork";
+import { TicketingPie } from "./TicketingPie";
 import { SalesChart } from "./SalesChart";
 import { BottomNavigation } from "./BottomNavigation";
 import { AppHeader } from "./AppHeader";
@@ -566,6 +567,7 @@ function Tariffs({
         ctx.dates.find((d) => d.id === scope.eventId)?.day,
       ),
   );
+  const [showDetails, setShowDetails] = useState(false);
   const [sort, setSort] = useState<"tickets" | "gross">("tickets");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
@@ -598,7 +600,9 @@ function Tariffs({
     <Card>
       <Heading
         title={
-          kind === "tariff" ? "Performance des tarifs" : "Réseaux de vente"
+          kind === "tariff"
+            ? "Performance des tarifs"
+            : "Ventes par billetterie"
         }
         subtitle={
           kind === "tariff"
@@ -625,53 +629,6 @@ function Tariffs({
         <ErrorState error={data.error} retry={data.retry} />
       ) : (
         <>
-          <Field
-            label={
-              kind === "tariff" ? "Rechercher un tarif" : "Rechercher un réseau"
-            }
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Nom, catégorie…"
-          />
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Button
-              secondary
-              title={sort === "tickets" ? "Tri : billets" : "Tri : recette TTC"}
-              onPress={() =>
-                setSort((v) => (v === "tickets" ? "gross" : "tickets"))
-              }
-            />
-          </View>
-          {categories.length > 1 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8 }}
-            >
-              {["", ...categories].map((cat) => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: cat === category }}
-                  key={cat}
-                  onPress={() => setCategory(cat)}
-                  style={{
-                    padding: 10,
-                    borderRadius: 14,
-                    backgroundColor: cat === category ? c.accent : c.secondary,
-                  }}
-                >
-                  <Txt
-                    style={{
-                      fontSize: 12,
-                      color: cat === category ? "#171B22" : c.text,
-                    }}
-                  >
-                    {cat || "Toutes les catégories"}
-                  </Txt>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
           {data.data?.status !== "complete" &&
             data.data?.status !== "exact" &&
             data.data?.status !== "no_sales" && (
@@ -691,109 +648,181 @@ function Tariffs({
               choisis une tournée.
             </Notice>
           )}
-          {!items.length ? (
-            <Empty title="Aucune ventilation disponible" />
-          ) : (
-            items.slice(0, limit).map((item) => {
-              const share = data.data?.detailTickets
-                ? (item.tickets / data.data.detailTickets) * 100
-                : null;
-              const shown =
-                ctx.mode === "gross"
-                  ? item.gross
-                  : ctx.mode === "horsDl"
-                    ? item.horsDl
-                    : null;
-              return (
-                <Pressable
-                  accessibilityRole={navigate ? "button" : undefined}
-                  key={item.key}
-                  disabled={!navigate}
-                  onPress={() => navigate?.(item)}
-                  style={{
-                    paddingVertical: 12,
-                    borderBottomColor: c.line,
-                    borderBottomWidth: 1,
-                    gap: 9,
-                  }}
+          {kind === "distributor" && (
+            <>
+              <TicketingPie items={data.data?.items ?? []} />
+              <Button
+                secondary
+                title={
+                  showDetails ? "Masquer le détail" : "Détail des billetteries"
+                }
+                onPress={() => setShowDetails((v) => !v)}
+              />
+            </>
+          )}
+          {(kind === "tariff" || showDetails) && (
+            <>
+              <Field
+                label={
+                  kind === "tariff"
+                    ? "Rechercher un tarif"
+                    : "Rechercher un réseau"
+                }
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Nom, catégorie…"
+              />
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Button
+                  secondary
+                  title={
+                    sort === "tickets" ? "Tri : billets" : "Tri : recette TTC"
+                  }
+                  onPress={() =>
+                    setSort((v) => (v === "tickets" ? "gross" : "tickets"))
+                  }
+                />
+              </View>
+              {categories.length > 1 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8 }}
                 >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 12,
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Txt style={{ fontWeight: "700" }}>{item.label}</Txt>
-                      <Txt muted style={{ fontSize: 12 }}>
-                        {[
-                          item.category,
-                          item.dateCount ? item.dateCount + " dates" : null,
-                          item.variants > 1
-                            ? item.variants + " variantes de prix"
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </Txt>
-                    </View>
-                    <View style={{ alignItems: "flex-end", maxWidth: "45%" }}>
-                      <Txt style={{ fontWeight: "700" }}>
-                        {exact(item.tickets)} billets
-                      </Txt>
-                      <Txt muted style={{ fontSize: 12 }}>
-                        {shown === null
-                          ? "Recette indisponible"
-                          : exact(shown, true)}
-                      </Txt>
-                    </View>
-                  </View>
-                  <View
-                    style={{
-                      height: 9,
-                      backgroundColor: c.secondary,
-                      borderRadius: 3,
-                    }}
-                  >
-                    <View
+                  {["", ...categories].map((cat) => (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: cat === category }}
+                      key={cat}
+                      onPress={() => setCategory(cat)}
                       style={{
-                        width: `${Math.min(100, ((sort === "tickets" ? item.tickets : (item.gross ?? 0)) / max) * 100)}%`,
-                        height: 9,
+                        padding: 10,
+                        borderRadius: 14,
                         backgroundColor:
-                          kind === "tariff" ? "#4885FF" : "#AB83F6",
-                        borderRadius: 3,
+                          cat === category ? c.accent : c.secondary,
                       }}
-                    />
-                  </View>
-                  <Txt muted style={{ fontSize: 11 }}>
-                    {share === null
-                      ? "Part indisponible"
-                      : share.toFixed(1).replace(".", ",") +
-                        " % des billets ventilés"}
-                    {navigate ? " · Voir les dates" : ""}
-                  </Txt>
-                </Pressable>
-              );
-            })
-          )}
-          {items.length > limit && (
-            <Button
-              secondary
-              title="Afficher plus"
-              onPress={() => setLimit((n) => n + 30)}
-            />
-          )}
-          <Txt muted style={{ fontSize: 11, lineHeight: 17 }}>
-            Les tarifs sont rapprochés par nom et catégorie. Les variantes de
-            prix restent distinctes dans le détail. Un prix nul ne prouve pas
-            une invitation.
-          </Txt>
-          {ctx.mode !== "gross" && ctx.mode !== "horsDl" && (
-            <Notice>
-              La recette sélectionnée n’est pas certifiée par tarif. Les volumes
-              restent consultables.
-            </Notice>
+                    >
+                      <Txt
+                        style={{
+                          fontSize: 12,
+                          color: cat === category ? "#171B22" : c.text,
+                        }}
+                      >
+                        {cat || "Toutes les catégories"}
+                      </Txt>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+              {!items.length ? (
+                <Empty title="Aucune ventilation disponible" />
+              ) : (
+                items.slice(0, limit).map((item) => {
+                  const share = data.data?.detailTickets
+                    ? (item.tickets / data.data.detailTickets) * 100
+                    : null;
+                  const shown =
+                    ctx.mode === "gross"
+                      ? item.gross
+                      : ctx.mode === "horsDl"
+                        ? item.horsDl
+                        : null;
+                  return (
+                    <Pressable
+                      accessibilityRole={navigate ? "button" : undefined}
+                      key={item.key}
+                      disabled={!navigate}
+                      onPress={() => navigate?.(item)}
+                      style={{
+                        paddingVertical: 12,
+                        borderBottomColor: c.line,
+                        borderBottomWidth: 1,
+                        gap: 9,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          gap: 12,
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Txt style={{ fontWeight: "700" }}>{item.label}</Txt>
+                          <Txt muted style={{ fontSize: 12 }}>
+                            {[
+                              item.category,
+                              item.dateCount ? item.dateCount + " dates" : null,
+                              item.variants > 1
+                                ? item.variants + " variantes de prix"
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </Txt>
+                        </View>
+                        <View
+                          style={{ alignItems: "flex-end", maxWidth: "45%" }}
+                        >
+                          <Txt style={{ fontWeight: "700" }}>
+                            {exact(item.tickets)} billets
+                          </Txt>
+                          <Txt muted style={{ fontSize: 12 }}>
+                            {shown === null
+                              ? "Recette indisponible"
+                              : exact(shown, true)}
+                          </Txt>
+                        </View>
+                      </View>
+                      <View
+                        style={{
+                          height: 9,
+                          backgroundColor: c.secondary,
+                          borderRadius: 3,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: `${Math.min(100, ((sort === "tickets" ? item.tickets : (item.gross ?? 0)) / max) * 100)}%`,
+                            height: 9,
+                            backgroundColor:
+                              kind === "tariff" ? "#4885FF" : "#AB83F6",
+                            borderRadius: 3,
+                          }}
+                        />
+                      </View>
+                      <Txt muted style={{ fontSize: 11 }}>
+                        {share === null
+                          ? "Part indisponible"
+                          : share.toFixed(1).replace(".", ",") +
+                            " % des billets ventilés"}
+                        {navigate ? " · Voir les dates" : ""}
+                      </Txt>
+                    </Pressable>
+                  );
+                })
+              )}
+              {items.length > limit && (
+                <Button
+                  secondary
+                  title="Afficher plus"
+                  onPress={() => setLimit((n) => n + 30)}
+                />
+              )}
+              {kind === "tariff" && (
+                <Txt muted style={{ fontSize: 11, lineHeight: 17 }}>
+                  Les tarifs sont rapprochés par nom et catégorie. Les variantes
+                  de prix restent distinctes dans le détail. Un prix nul ne
+                  prouve pas une invitation.
+                </Txt>
+              )}
+              {ctx.mode !== "gross" && ctx.mode !== "horsDl" && (
+                <Notice>
+                  La recette sélectionnée n’est pas certifiée par tarif. Les
+                  volumes restent consultables.
+                </Notice>
+              )}
+            </>
           )}
         </>
       )}
