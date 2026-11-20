@@ -56,3 +56,23 @@ Les cartes sont lues par groupes de 20 séjours, avec deux groupes maximum en pa
 Le rafraîchissement de la liste, le retour au premier plan et la fermeture d’une fiche réception relancent la vérification. Pendant une actualisation, l’ancien statut n’est pas affiché comme confirmé. Une erreur conserve l’accès à la fiche et affiche À confirmer, avec la possibilité de relancer les soldes.
 
 TypeScript et 91 tests réussis, dont sept nouveaux tests des lectures groupées, des frontières de projets/espaces, des sources masquées et des cas Réglé/À régler/À confirmer. Aucun changement serveur, de droits ou de données métier.
+
+## Enregistrer et corriger les règlements
+
+Les chambres et la rooming list restent en lecture seule. Un utilisateur disposant du droit financier Web `finance / budget_global / write` peut ouvrir « Enregistrer ou corriger un règlement » sur un séjour, puis choisir une échéance d’acompte ou de solde existante. Le formulaire enregistre un paiement déjà effectué : montant, date réelle et moyen de paiement. Les paiements partiels sont possibles ; le reste de l’échéance limite la saisie. Les échéances et tarifs restent préparés dans Bordero Web.
+
+La correction sélectionne un règlement réel précis, y compris lorsqu’une échéance a reçu plusieurs paiements. Le motif est obligatoire, comme sur le Web. Le serveur annule historiquement le règlement remplacé et crée son remplacement dans une même transaction. Si le montant change, les justificatifs doivent être revérifiés dans Bordero Web, conformément au comportement du service existant.
+
+Le mobile appelle exclusivement `mark_hotel_payment_paid` et `correct_hotel_payment_paid`. Les fonctions déployées et leurs droits ont été vérifiés en lecture : exécution authentifiée autorisée, anonyme refusée, contrôle financier côté serveur, verrouillage des lignes, plafonnement et audit. Aucun changement de fonction, de politique ou de table n’a été nécessaire. Le client ne modifie jamais directement les colonnes de paiement.
+
+Chaque tentative possède un UUID sécurisé et conserve exactement sa charge avant l’envoi. Un double clic ou deux instances du formulaire sur le même séjour ne lancent pas deux écritures simultanées. Après une réponse incertaine, le formulaire propose « Vérifier cette tentative », avec la même clé et les mêmes valeurs, sans nouvel envoi automatique. Une réponse perdue ne devient pas un succès présumé. Un ancien paiement seulement déclaré payé reste à régulariser dans le Web.
+
+Exception ciblée au cache de lecture en mémoire : la seule tentative non confirmée est conservée dans le trousseau chiffré de l’appareil, accessible uniquement déverrouillé, liée au compte, espace, projet et séjour. Elle contient la clé de reprise, les identités nécessaires et les champs saisis, sans jeton d’accès ni données de voyageurs. Elle est supprimée après confirmation. Une reprise après fermeture de l’app utilise la même opération, sans duplication. Les historiques et rooming lists ne sont pas enregistrés sur disque par ce mécanisme.
+
+Après confirmation serveur, les totaux sont relus et les soldes des cartes sont revérifiés à la fermeture de la fiche. Une erreur de relecture ne nie pas un paiement confirmé ; les actions restent bloquées jusqu’à l’actualisation des données. Les refus de droits et changements de compte restent bloquants.
+
+TypeScript et 112 tests réussis : protocoles, correction ciblée, montants/dates français, plafonds, permissions Web, double clic, concurrence entre formulaires, pertes de réponse et reprise après redémarrage simulé. Les tests utilisent des données synthétiques et des doubles de transport. Aucun règlement réel de production n’a été créé ou corrigé pour les tests.
+
+La date réelle se choisit désormais dans le calendrier natif : toucher la date ouvre le calendrier iOS ; Android présente un calendrier avec Choisir/Annuler. Les jours futurs sont exclus, en cohérence avec la règle serveur Europe/Paris. Trois tests couvrent la valeur initiale, les limites de jour et les changements d’heure. Le montant et le moyen de paiement restent inchangés lors du choix de la date.
+
+L’utilisateur a confirmé avoir enregistré avec succès un solde avec sa date avant cette évolution du sélecteur. Aucun règlement fictif n’a été envoyé en production par l’agent.

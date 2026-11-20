@@ -1,3 +1,4 @@
+import { HotelPaymentControls } from "./HotelPaymentControls";
 import { HotelInvoiceDetails } from "./HotelInvoiceDetails";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -462,6 +463,7 @@ export function HotelReception({
   const c = useTheme();
   const [showRooms, setShowRooms] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [paymentBusy, setPaymentBusy] = useState(false);
   const finance = useResource(
     `hotel-finance:${stay.workspace_id}:${stay.project_id}:${stay.id}`,
     (s) => loadHotelFinance(stay, s),
@@ -496,10 +498,15 @@ export function HotelReception({
       animationType="slide"
       presentationStyle="pageSheet"
       supportedOrientations={["portrait", "landscape"]}
-      onRequestClose={close}
+      onRequestClose={() => {
+        if (!paymentBusy) close();
+      }}
+      allowSwipeDismissal={false}
     >
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
         <ScrollView
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={{
             padding: 20,
             gap: 18,
@@ -520,13 +527,14 @@ export function HotelReception({
               secondary
               icon="close-outline"
               title="Fermer"
+              disabled={paymentBusy}
               onPress={close}
             />
             <Button
               secondary
               icon="refresh-outline"
               title="Actualiser"
-              disabled={finance.loading || rooming.loading}
+              disabled={paymentBusy || finance.loading || rooming.loading}
               onPress={() => {
                 finance.retry();
                 if (showRooms) rooming.retry();
@@ -712,6 +720,14 @@ export function HotelReception({
               updatedAt={finance.updatedAt}
             />
           </Card>
+          <HotelPaymentControls
+            stay={stay}
+            finance={finance.data}
+            loading={finance.loading}
+            error={finance.error}
+            onChanged={finance.retry}
+            onBusyChange={setPaymentBusy}
+          />
           <Card>
             <Button
               secondary

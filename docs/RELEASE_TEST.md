@@ -56,3 +56,15 @@ Les trois compilations Release finales (iPhone, simulateur et Android) sont réu
 La liste affiche directement le reste en euros exacts : Réglé en vert, À régler en rouge, À confirmer si les données ne permettent pas la confirmation. Les lectures sont groupées par 20 séjours, avec deux groupes simultanés et sans chargement des détails tarifaires. Après un rafraîchissement ou la fermeture d’une fiche, les statuts sont revérifiés. TypeScript et 91 tests réussis. Aucun changement Supabase.
 
 Les trois compilations finales Release (iPhone, simulateur et Android) sont réussies pour les soldes sur les cartes. L’aperçu natif montre les trois cas Réglé, À régler et À confirmer sur des données fictives. Installation sur l’iPhone ArtDBC réalisée ; version maintenue à 1.0.0 Build 1. La lecture des nouveaux soldes groupés avec le compte de l’utilisateur reste à confirmer sur appareil.
+
+## Écriture des règlements d’hôtel
+
+Enregistrement et correction des paiements d’acomptes/soldes sur les échéances existantes, avec montant, date réelle, moyen de paiement et motif de correction. Même permission Finance et mêmes fonctions transactionnelles que le Web. Chambres et rooming toujours en lecture seule. Reprise d’une tentative incertaine par la même clé, conservée dans le trousseau chiffré jusqu’à confirmation ; aucune répétition automatique d’écriture.
+
+TypeScript et 112 tests réussis. Fonctions déployées vérifiées en lecture et exécution anonyme refusée par leurs privilèges. Le formulaire d’enregistrement et le générateur UUID natif ont été observés dans un aperçu isolé fictif. L’utilisateur a confirmé le formulaire puis l’enregistrement réel réussi d’un solde avec sa date sur iPhone. Aucun paiement de test n’a été créé par l’agent en production. Aucune migration ni modification de droits n’a été appliquée.
+
+Le champ de date a ensuite été remplacé par un calendrier natif, ouvert au toucher, pour les enregistrements et corrections. Les tests incluent les limites de date Europe/Paris. La validation tactile du nouveau calendrier sur l’iPhone reste à confirmer par l’utilisateur après installation.
+
+Le rendu du nouveau champ calendrier a été observé dans le formulaire natif de correction, avec données fictives. Les compilations iPhone physique et Android ont réussi ; la Release 1.0.0 Build 1 a été installée sur ArtDBC. L’ouverture tactile du calendrier et le choix d’une nouvelle date avec le compte réel restent à confirmer par l’utilisateur.
+
+La compilation Release du simulateur a également réussi. L’aperçu isolé a été retiré du simulateur et remplacé par l’application réelle. Les trois fichiers Release locaux ont été actualisés.

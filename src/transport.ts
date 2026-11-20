@@ -1,3 +1,4 @@
+import { paymentRejection, PaymentRejected } from "./paymentErrors";
 import { abortError, ReadError } from "./readPolicy";
 import { ReadQueue } from "./readQueue";
 interface SessionIdentity {
@@ -31,12 +32,17 @@ export function createReadTransport(options: Options) {
     signal: AbortSignal,
     body?: unknown,
     binary = false,
+    expectedUserId?: string,
   ): Promise<T> {
     if (!path.startsWith("/") || path.startsWith("//"))
       throw new ReadError("CONTRACT");
     if (signal.aborted) throw abortError();
     const initial = await options.getSession();
     if (!initial) throw new ReadError("SESSION");
+    if (expectedUserId && initial.user.id !== expectedUserId)
+      throw new PaymentRejected(
+        "Le compte connecté a changé. Ferme la fiche puis reconnecte-toi.",
+      );
     let session = initial;
     if (initial.expires_at && initial.expires_at * 1000 < Date.now() + 15000) {
       const next = await refresh();
@@ -70,7 +76,7 @@ export function createReadTransport(options: Options) {
             ...(binary ? { Accept: "image/*" } : {}),
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-          redirect: binary ? "error" : "follow",
+          redirect: binary || expectedUserId ? "error" : "follow",
           signal: controller.signal,
         });
       let response = await send(session.access_token);
@@ -87,6 +93,20 @@ export function createReadTransport(options: Options) {
         }
         if (next.user.id !== initial.user.id) throw abortError();
         response = await send(next.access_token);
+      }
+      if (
+        expectedUserId &&
+        !response.ok &&
+        response.status >= 400 &&
+        response.status < 500 &&
+        ![408, 425, 429].includes(response.status)
+      ) {
+        const body = (await response.json().catch(() => null)) as {
+          message?: unknown;
+        } | null;
+        throw paymentRejection(
+          typeof body?.message === "string" ? body.message : "",
+        );
       }
       if (response.status === 401) throw new ReadError("SESSION", 401);
       if (response.status === 403) throw new ReadError("FORBIDDEN", 403);
@@ -121,6 +141,7 @@ export function createReadTransport(options: Options) {
       if (timedOut) throw new ReadError("TIMEOUT");
       if (
         error instanceof ReadError ||
+        error instanceof PaymentRejected ||
         (error instanceof Error && error.name === "AbortError")
       )
         throw error;
@@ -131,6 +152,23 @@ export function createReadTransport(options: Options) {
     }
   }
   return {
+    // Mutations are explicit, scoped to the displayed identity and never wrapped in retryRead.
+    mutate: <T>(
+      name: "mark_hotel_payment_paid" | "correct_hotel_payment_paid",
+      signal: AbortSignal,
+      body: Record<string, unknown>,
+      userId: string,
+    ) => {
+      if (
+        !["mark_hotel_payment_paid", "correct_hotel_payment_paid"].includes(
+          name,
+        )
+      )
+        return Promise.reject(
+          new PaymentRejected("Action de paiement non autorisée."),
+        );
+      return read<T>("/rest/v1/rpc/" + name, signal, body, false, userId);
+    },
     request: <T>(path: string, signal: AbortSignal, body?: unknown) =>
       /mobile-dashboard|get_project_sales_|get_event_dates_economic_sales|v_event_date_sales_/.test(
         path,

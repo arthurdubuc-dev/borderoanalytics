@@ -88,6 +88,7 @@ const transport = createReadTransport({
   },
 });
 export const request = transport.request;
+export const mutateHotelPayment = transport.mutate;
 export const imageRequest = transport.image;
 export function rpc<T>(
   name: string,
