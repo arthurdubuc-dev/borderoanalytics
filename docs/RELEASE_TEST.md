@@ -76,3 +76,9 @@ Correction du décalage confirmé dans le code : la liste attendait auparavant l
 TypeScript et 121 tests réussis, dont neuf nouveaux scénarios de composants React avec services simulés. La fiche et la liste sont vérifiées avant fermeture, après réouverture et après remontage de l’onglet. Cas supplémentaires : réponse ancienne retardée, réseau lent, refus de lecture et réponse de paiement incertaine. Aucun règlement de production n’a été saisi ou corrigé par l’agent pour ces tests ; la validation réelle des nouveaux rafraîchissements avec le compte utilisateur reste distincte.
 
 Les compilations Release iPhone, simulateur et Android ont réussi. La Release 1.0.0 Build 1 a été installée sur ArtDBC ; les fichiers Release locaux ont été actualisés. La compilation Android a nécessité le nettoyage des fichiers générés du module Expo, qui contenaient une classe dupliquée ; aucune source native n’a été modifiée.
+
+### Correction à la baisse d’un séjour déjà soldé
+
+Deux tests React complémentaires démarrent avec une facture de 500 € intégralement réglée et un statut vert « Réglé ». La correction du règlement à 450,25 € affiche automatiquement 49,75 € à régler ; la correction à 499,99 € affiche 0,01 €. Vérification du « Déjà réglé » dans la fiche, du reste exact dans la fiche et sur la carte, du statut visible rouge « À régler », de la possibilité d’un nouveau règlement et de la conservation des valeurs après fermeture/réouverture et remontage de l’onglet. Aucun rafraîchissement manuel dans ces scénarios.
+
+TypeScript et 123 tests réussis, dont onze scénarios React. Les services sont simulés ; aucun paiement réel n’a été modifié. Aucun changement de code applicatif nécessaire : le mécanisme de rafraîchissement déjà livré couvre cette transition. La Release installée reste valable.

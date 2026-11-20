@@ -406,3 +406,62 @@ it("invalidates only matching workspace reads, preserving unrelated financial an
   expect(cache.peek("0:hotel-finance:other:p:stay:0")?.value).toBe(42);
   expect(cache.peek("0:sales:w")?.value).toBe(42);
 });
+
+it.each([450.25, 499.99])(
+  "reopens a fully paid stay after reducing its only payment from 500 to %s, with matching sheet/list remainder and red status",
+  async (correctedAmount) => {
+    paid = 500;
+    await mount();
+    const initialStatus = card().findAll(
+      (node) => String(node.type) === "Txt" && text(node) === "Réglé",
+    )[0]!;
+    expect(initialStatus.props.style.color).toBe("#067647");
+    await openEditor("correct");
+    assertAmounts(500);
+    await act(async () => {
+      nodes("Field")
+        .find((node) => node.props.label === "Montant réglé (€)")!
+        .props.onChangeText(String(correctedAmount).replace(".", ","));
+    });
+    api.submit.mockImplementation(async (_scope, input) => {
+      expect(input).toMatchObject({
+        kind: "correct",
+        scheduleId: "balance",
+        settlementId: "settlement",
+        amount: correctedAmount,
+      });
+      paid = input.amount;
+      return { replayed: false };
+    });
+    await press(button("Confirmer la correction"));
+    expect(api.submit).toHaveBeenCalledTimes(1);
+    assertAmounts(correctedAmount);
+    const status = card().findAll(
+      (node) => String(node.type) === "Txt" && text(node) === "À régler",
+    )[0]!;
+    expect(status.props.style.color).toBe("#c00");
+    expect(
+      card().findAll(
+        (node) => String(node.type) === "Txt" && text(node) === "Réglé",
+      ),
+    ).toHaveLength(0);
+    // The visible card value, not only its accessibility label, must match the sheet.
+    expect(
+      card()
+        .findAll(
+          (node) =>
+            String(node.type) === "Txt" && node.props.style?.fontSize === 21,
+        )
+        .map(text),
+    ).toContain(exact(500 - correctedAmount, true));
+    expect(button("Enregistrer un règlement").props.disabled).toBe(false);
+    await press(button("Fermer"));
+    await press(card());
+    assertAmounts(correctedAmount);
+    await act(async () => tree!.unmount());
+    tree = undefined;
+    await mount();
+    await press(card());
+    assertAmounts(correctedAmount);
+  },
+);
