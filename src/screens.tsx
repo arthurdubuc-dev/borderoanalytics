@@ -35,6 +35,7 @@ import { ProjectArtwork } from "./ProjectArtwork";
 import { TicketingPie } from "./TicketingPie";
 import { SalesChart } from "./SalesChart";
 import { BottomNavigation } from "./BottomNavigation";
+import { HotelsScreen } from "./HotelsScreen";
 import { AppHeader } from "./AppHeader";
 import { AppearanceSettings } from "./AppearanceSettings";
 import {
@@ -93,6 +94,8 @@ type ContextValue = {
   workspace: Workspace;
   catalog: Catalog;
   dates: DateSummary[];
+  datesReady: boolean;
+  datesError?: unknown;
   mode: RevenueMode;
   setMode: (m: RevenueMode) => void;
   retry: () => void;
@@ -1169,9 +1172,11 @@ function DeferredSection({
 function Page({
   children,
   bottomSpace = 0,
+  salesStatus = true,
 }: {
   children: React.ReactNode;
   bottomSpace?: number;
+  salesStatus?: boolean;
 }) {
   const ctx = useDashboard();
   const c = useTheme();
@@ -1194,18 +1199,22 @@ function Page({
       }
       scrollEventThrottle={120}
       refreshControl={
-        <RefreshControl
-          refreshing={ctx.refreshing || ctx.finance.loading}
-          onRefresh={ctx.retry}
-          tintColor="#B8A600"
-        />
+        salesStatus ? (
+          <RefreshControl
+            refreshing={ctx.refreshing || ctx.finance.loading}
+            onRefresh={ctx.retry}
+            tintColor="#B8A600"
+          />
+        ) : undefined
       }
     >
-      <UpdatedNote
-        loading={ctx.refreshing}
-        error={ctx.refreshError}
-        updatedAt={ctx.refreshedAt}
-      />
+      {salesStatus && (
+        <UpdatedNote
+          loading={ctx.refreshing}
+          error={ctx.refreshError}
+          updatedAt={ctx.refreshedAt}
+        />
+      )}
       <Viewport.Provider value={bottom}>{children}</Viewport.Provider>
     </ScrollView>
   );
@@ -1355,7 +1364,7 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Page bottomSpace={menuHeight}>
+      <Page bottomSpace={menuHeight} salesStatus={tab !== "Hôtels"}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Heading
@@ -1363,25 +1372,27 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
               subtitle={ctx.workspace.name}
             />
           </View>
-          <Pressable
-            accessibilityLabel="Filtrer les représentations"
-            accessibilityRole="button"
-            onPress={() => setFilter(true)}
-            style={{
-              marginLeft: "auto",
-              padding: 13,
-              borderRadius: 15,
-              backgroundColor:
-                ctx.from || ctx.to || ctx.season ? c.accent : c.surface,
-            }}
-          >
-            <Icon
-              name="options-outline"
-              color={ctx.from || ctx.to || ctx.season ? "#171B22" : c.text}
-            />
-          </Pressable>
+          {tab !== "Hôtels" && (
+            <Pressable
+              accessibilityLabel="Filtrer les représentations"
+              accessibilityRole="button"
+              onPress={() => setFilter(true)}
+              style={{
+                marginLeft: "auto",
+                padding: 13,
+                borderRadius: 15,
+                backgroundColor:
+                  ctx.from || ctx.to || ctx.season ? c.accent : c.surface,
+              }}
+            >
+              <Icon
+                name="options-outline"
+                color={ctx.from || ctx.to || ctx.season ? "#171B22" : c.text}
+              />
+            </Pressable>
+          )}
         </View>
-        {(ctx.from || ctx.to || ctx.season) && (
+        {tab !== "Hôtels" && (ctx.from || ctx.to || ctx.season) && (
           <Notice>
             {[
               ctx.season,
@@ -1392,7 +1403,30 @@ function MainScreen({ navigation }: NativeStackScreenProps<Routes, "Main">) {
               .join(" · ")}
           </Notice>
         )}
-        {tab === "Accueil" ? (
+        {tab === "Hôtels" ? (
+          <HotelsScreen
+            workspaceId={ctx.workspace.id}
+            projects={ctx.catalog.projects}
+          />
+        ) : !ctx.datesReady ? (
+          ctx.datesError ? (
+            <ErrorState error={ctx.datesError} retry={ctx.retry} />
+          ) : (
+            <Card>
+              <Heading
+                title="Préparation des chiffres"
+                subtitle="Tu peux déjà consulter les hôtels pendant le chargement des ventes."
+              />
+              <Loading />
+              <Button
+                secondary
+                icon="bed-outline"
+                title="Ouvrir les hôtels"
+                onPress={() => setTab("Hôtels")}
+              />
+            </Card>
+          )
+        ) : tab === "Accueil" ? (
           <>
             <Summary scope={scope} />
             <WorkspaceEvolution />
@@ -1560,11 +1594,13 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
     finance.retry();
   };
   const value: ContextValue | null =
-    workspace && cat.data && dates.data
+    workspace && cat.data
       ? {
           workspace,
           catalog: cat.data,
-          dates: dates.data,
+          dates: dates.data ?? [],
+          datesReady: !!dates.data,
+          datesError: dates.error,
           mode,
           setMode,
           retry,
@@ -1588,15 +1624,12 @@ export function Dashboard({ userEmail }: { userEmail: string }) {
       />
       <View style={{ flex: 1, backgroundColor: c.bg }}>
         {(!workspaces.data && workspaces.loading) ||
-        (!cat.data && cat.loading) ||
-        (!dates.data && dates.loading) ? (
+        (!cat.data && cat.loading) ? (
           <Loading />
         ) : workspaces.error && !workspaces.data ? (
           <ErrorState error={workspaces.error} retry={workspaces.retry} />
         ) : cat.error && !cat.data ? (
           <ErrorState error={cat.error} retry={cat.retry} />
-        ) : dates.error && !dates.data ? (
-          <ErrorState error={dates.error} retry={dates.retry} />
         ) : !workspace ? (
           <Empty
             title="Aucun espace accessible"

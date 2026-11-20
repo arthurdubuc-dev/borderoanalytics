@@ -49,3 +49,9 @@ La migration `20261114211413_mobile_dashboard_source_metadata_projection.sql` es
 Le plan de cette sélection de métadonnées ne contient plus la table des tarifs. Les filtres explicites sur les dates et l’espace, les capacités et les RLS restent en place. La fonction reste STABLE, SECURITY INVOKER, avec search_path vide ; l’exécution anonyme est refusée. Aucune formule financière, donnée métier ou politique d’accès n’est modifiée.
 
 Les 67 tests et TypeScript passent après cette évolution. Le gain de temps après cette deuxième optimisation reste à mesurer avec la session normale du téléphone ; les 5,9 à 6,4 secondes ci-dessus sont la référence AVANT cette migration. Ne pas les présenter comme une mesure de la nouvelle version.
+
+## Réactivité de l’interface — 20 novembre 2026
+
+Le chargement des ventes ne bloque plus le montage de la navigation après le catalogue : l’onglet Hôtels est utilisable pendant la préparation des chiffres. Les autres vues attendent les données économiques pour éviter les faux zéros. Cette évolution n’accélère pas à elle seule le calcul serveur des recettes et aucun nouveau temps connecté n’est annoncé.
+
+Les formats de chiffres et de dates sont partagés entre les rendus. Les lectures encore fraîches du cache peuvent s’afficher immédiatement, et leur heure de lecture réelle est conservée. Une réutilisation n’est plus datée artificiellement de l’instant du retour sur la page. Les caches restent en mémoire, isolés par espace et réinitialisés à la fin de la session.

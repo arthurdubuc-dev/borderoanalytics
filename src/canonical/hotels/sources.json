@@ -1,0 +1,14 @@
+[
+  {
+    "path": "src/lib/hotelPayments/hotelPaymentPlan.ts",
+    "sha256": "1049c3d15ad9e8d984872437eced3013691e9d82a3ddb559b4769a193dbe85dc"
+  },
+  {
+    "path": "src/lib/hotelPayments/settlementJustification.ts",
+    "sha256": "8753eda3d1017251e0651c02d6245f09dcbb0324adb9fb237f7c9352bb467a53"
+  },
+  {
+    "path": "src/domain/hotels/invoiceCalc.ts",
+    "sha256": "0b293a371420b872c5bba6ae6cd8814439c1eb5adaee7d8eeddb7f0f9460ec94"
+  }
+]

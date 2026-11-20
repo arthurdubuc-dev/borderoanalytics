@@ -67,6 +67,13 @@ export class ReadCache {
     private ttl = 60000,
     private now: () => number = Date.now,
   ) {}
+  /** Read an already-authorized fresh value without starting work or extending its age. */
+  peek<T>(key: string): { value: T; updatedAt: number } | undefined {
+    const entry = this.entries.get(key);
+    if (!entry?.hasValue || this.now() - entry.updatedAt > this.ttl)
+      return undefined;
+    return { value: entry.value as T, updatedAt: entry.updatedAt };
+  }
   acquire<T>(
     key: string,
     loader: (signal: AbortSignal) => Promise<T>,
@@ -109,6 +116,9 @@ export class ReadCache {
     current.readers++;
     let released = false;
     return {
+      get updatedAt() {
+        return current.updatedAt;
+      },
       promise: (current.pending ??
         Promise.resolve(current.value)) as Promise<T>,
       release: () => {

@@ -39,3 +39,14 @@ Rendu iOS vérifié dans un aperçu natif isolé avec données explicitement syn
 La seconde optimisation de recette supprime une jointure redondante aux tarifs. Ses permissions ont été vérifiées sur la base déployée ; le nouveau temps connecté reste à mesurer. L’installation iPhone est réalisée ; son verrouillage a empêché le lancement automatique pour cette mesure.
 
 Les trois compilations finales Release (iPhone physique, simulateur et Android) ont réussi avec le nouveau composant SVG. L’aperçu synthétique a été retiré du simulateur, puis remplacé par l’application réelle. Les fichiers de test sont exclus de Git et des versions livrées.
+
+## Hôtels et réactivité — 20 novembre 2026
+
+Nouvel accès Hôtels et fiche réception : échéancier, acomptes réels, solde, échéances et rooming autorisée. L’accès peut s’ouvrir avant la fin du chargement économique des ventes. Les formats de dates et de montants sont réutilisés ; le cache conserve l’heure de sa lecture initiale.
+
+TypeScript et 84 tests réussis. Rendu de la fiche réception vérifié dans un aperçu iOS isolé avec données fictives. Contrats REST des séjours, engagements et échéances vérifiés en accès anonyme sur un identifiant synthétique : réponses valides et aucune ligne retournée. Aucune modification Supabase n’était nécessaire. Voir `HOTELS_RECEPTION.md` pour les sources, les cas incertains et les restrictions de rooming.
+
+
+Après le test iPhone, l’utilisateur a confirmé l’affichage des montants et de la rooming list. Le résumé a ensuite été clarifié à sa demande : total facture, déjà réglé et reste regroupés, couleurs noir/vert/rouge, montants exacts et suppression du doublon. Détail replié pour les prix chambres, PDJ, prestations et taxes. Les calculs et le total enregistré proviennent du Web ; les situations incomplètes restent signalées. 84 tests réussis. La vérification positive des nouveaux postes détaillés avec le compte de l’utilisateur reste à poursuivre après mise à jour.
+
+Les trois compilations Release finales (iPhone, simulateur et Android) sont réussies. Le rendu natif des trois montants et du Détail a été vérifié sur des données fictives. Version conservée : 1.0.0, Build 1. Aucun fichier de démonstration n’est inclus dans l’application réelle ni dans Git.

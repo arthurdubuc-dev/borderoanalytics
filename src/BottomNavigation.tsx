@@ -2,7 +2,7 @@ import React from "react";
 import { View, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, Icon, Txt } from "./ui";
-export type MainTab = "Accueil" | "Projets" | "Dates" | "Analyses";
+export type MainTab = "Accueil" | "Projets" | "Dates" | "Analyses" | "Hôtels";
 export function BottomNavigation({
   active,
   onChange,
@@ -26,7 +26,7 @@ export function BottomNavigation({
         zIndex: 20,
         backgroundColor: "transparent",
         paddingBottom: Math.max(insets.bottom, 12),
-        paddingHorizontal: 20,
+        paddingHorizontal: 12,
         paddingTop: 8,
       }}
     >
@@ -55,6 +55,7 @@ export function BottomNavigation({
             { name: "Projets", icon: "albums-outline" },
             { name: "Dates", icon: "calendar-outline" },
             { name: "Analyses", icon: "stats-chart-outline" },
+            { name: "Hôtels", icon: "bed-outline" },
           ] as const
         ).map((t) => (
           <Pressable
@@ -79,7 +80,7 @@ export function BottomNavigation({
             <Txt
               style={{
                 color: active === t.name ? c.text : c.muted,
-                fontSize: 11,
+                fontSize: 10,
                 lineHeight: 15,
                 fontWeight: "600",
               }}

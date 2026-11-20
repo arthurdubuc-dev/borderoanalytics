@@ -13,14 +13,34 @@ export const REVENUE_MODES: ReadonlyArray<{
   },
   { key: "net", label: "Recette Nette · après TVA et taxes", short: "Nette" },
 ];
+const eurFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+  minimumFractionDigits: 2,
+});
+const integerFormatter = new Intl.NumberFormat("fr-FR", {
+  maximumFractionDigits: 0,
+});
+const parisFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Paris",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const longDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Europe/Paris",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+const shortDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Europe/Paris",
+  day: "numeric",
+  month: "short",
+});
 export function exact(value: number | null, money = false): string {
   if (value === null || !Number.isFinite(value)) return "Indisponible";
-  return new Intl.NumberFormat(
-    "fr-FR",
-    money
-      ? { style: "currency", currency: "EUR", minimumFractionDigits: 2 }
-      : { maximumFractionDigits: 0 },
-  ).format(value);
+  return (money ? eurFormatter : integerFormatter).format(value);
 }
 export function compact(value: number | null, money = false): string {
   if (value === null || !Number.isFinite(value)) return "—";
@@ -38,22 +58,12 @@ export function compact(value: number | null, money = false): string {
     : exact(value, money);
 }
 export function parisDay(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Paris",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
+  return parisFormatter.format(now);
 }
 export function dayLabel(value: string, short = false): string {
   const d = new Date(value + "T12:00:00Z");
   return Number.isFinite(+d)
-    ? new Intl.DateTimeFormat("fr-FR", {
-        timeZone: "Europe/Paris",
-        day: "numeric",
-        month: short ? "short" : "long",
-        ...(short ? {} : { year: "numeric" }),
-      }).format(d)
+    ? (short ? shortDateFormatter : longDateFormatter).format(d)
     : value;
 }
 export function sumKnown(values: ReadonlyArray<number | null>): number | null {

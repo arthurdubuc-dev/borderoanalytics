@@ -33,10 +33,21 @@ export function useResource<T>(
     }
     let active = true;
     const controller = new AbortController();
+    const cached =
+      nonce === 0
+        ? context?.cache.peek<T>(`${context.revision}:${key}`)
+        : undefined;
     setState((previous) =>
-      previous.key === key
-        ? { ...previous, error: undefined, loading: true }
-        : { key, loading: true },
+      cached
+        ? {
+            key,
+            data: cached.value,
+            updatedAt: cached.updatedAt,
+            loading: false,
+          }
+        : previous.key === key
+          ? { ...previous, error: undefined, loading: true }
+          : { key, loading: true },
     );
     const lease = context?.cache.acquire(
       `${context.revision}:${key}`,
@@ -49,7 +60,12 @@ export function useResource<T>(
     pending.then(
       (data) => {
         if (active)
-          setState({ key, data, loading: false, updatedAt: Date.now() });
+          setState({
+            key,
+            data,
+            loading: false,
+            updatedAt: lease?.updatedAt ?? Date.now(),
+          });
       },
       (error) => {
         if (active)
@@ -68,8 +84,21 @@ export function useResource<T>(
       lease?.release();
     };
   }, [key, nonce, context?.cache, context?.revision]);
+  const cached =
+    key !== null && nonce === 0
+      ? context?.cache.peek<T>(`${context.revision}:${key}`)
+      : undefined;
   return {
-    ...(state.key === key ? state : { key, loading: key !== null }),
+    ...(state.key === key
+      ? state
+      : cached
+        ? {
+            key,
+            data: cached.value,
+            updatedAt: cached.updatedAt,
+            loading: false,
+          }
+        : { key, loading: key !== null }),
     retry: useCallback(() => setNonce((n) => n + 1), []),
   };
 }
