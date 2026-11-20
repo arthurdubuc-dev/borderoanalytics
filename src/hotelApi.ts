@@ -1,3 +1,4 @@
+import { ReadQueue } from "./readQueue";
 import { HOTEL_INVOICE_FIELDS, projectHotelInvoice } from "./hotelInvoice";
 import { table, rpc } from "./client";
 import { ReadError } from "./readPolicy";
@@ -172,4 +173,142 @@ export async function loadHotelRooming(stay: HotelStay, signal: AbortSignal) {
     };
   });
   return { guests, reference: result.booking_reference };
+}
+
+export const HOTEL_FINANCE_BATCH_SIZE = 20;
+export type HotelFinanceSnapshot = Awaited<ReturnType<typeof loadHotelFinance>>;
+const hotelFinanceQueue = new ReadQueue(2);
+/** Three bounded reads per group, rather than three requests for each hotel card. */
+export async function loadHotelFinanceBatch(
+  stays: readonly HotelStay[],
+  signal: AbortSignal,
+): Promise<Array<{ stayId: string; finance: HotelFinanceSnapshot }>> {
+  if (!stays.length) return [];
+  const workspaceId = stays[0]!.workspace_id;
+  if (
+    stays.length > HOTEL_FINANCE_BATCH_SIZE ||
+    stays.some((s) => s.workspace_id !== workspaceId) ||
+    new Set(stays.map((s) => s.id)).size !== stays.length
+  )
+    throw new ReadError("CONTRACT");
+  return hotelFinanceQueue.run(signal, async () => {
+    const byId = new Map(stays.map((s) => [s.id, s]));
+    const projects = [...new Set(stays.map((s) => s.project_id))];
+    const commitments = await table<
+      HotelCommitment & { workspace_id: string; project_id: string }
+    >(
+      "payment_tracking",
+      {
+        select:
+          "id,source_id,expected_amount,received_amount,due_date,received_date,workspace_id,project_id",
+        workspace_id: `eq.${workspaceId}`,
+        project_id: `in.(${projects.join(",")})`,
+        source_type: "eq.hotel_stay",
+        source_id: `in.(${stays.map((s) => s.id).join(",")})`,
+        order: "id.asc",
+      },
+      signal,
+    );
+    const parentByStay = new Map<string, HotelCommitment>();
+    for (const parent of commitments) {
+      const stay = byId.get(parent.source_id);
+      if (
+        !stay ||
+        parent.workspace_id !== workspaceId ||
+        parent.project_id !== stay.project_id ||
+        parentByStay.has(stay.id)
+      )
+        throw new ReadError("CONTRACT");
+      parentByStay.set(stay.id, parent);
+    }
+    const allowed = stays.filter((s) => parentByStay.has(s.id));
+    const empty = () => ({
+      commitment: null,
+      payments: [] as HotelPayment[],
+      invoice: projectHotelInvoice(null),
+    });
+    if (!allowed.length)
+      return stays.map((s) => ({ stayId: s.id, finance: empty() }));
+    const paymentsRequest = table<
+      HotelPayment & { workspace_id: string; project_id: string }
+    >(
+      "hotel_payment_schedule",
+      {
+        select:
+          "id,hotel_stay_id,label,payment_type,amount,status,due_date,paid_at,paid_on,paid_amount,settlement_id,payment_method,workspace_id,project_id",
+        workspace_id: `eq.${workspaceId}`,
+        project_id: `in.(${projects.join(",")})`,
+        hotel_stay_id: `in.(${allowed.map((s) => s.id).join(",")})`,
+        order: "hotel_stay_id.asc,id.asc",
+      },
+      signal,
+    );
+    const entryIds = [
+      ...new Set(
+        allowed
+          .map((s) => s.roadbook_entry_id)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const invoiceRequest = entryIds.length
+      ? table<Record<string, unknown>>(
+          "roadbook_entries_with_financials",
+          {
+            select: "id,financials_updated_at,total_ttc:details->total_ttc",
+            workspace_id: `eq.${workspaceId}`,
+            id: `in.(${entryIds.join(",")})`,
+            type: "eq.hotel",
+            order: "id.asc",
+          },
+          signal,
+        ).catch((error) => {
+          if (signal.aborted) throw error;
+          return [];
+        })
+      : Promise.resolve([] as Record<string, unknown>[]);
+    const [payments, invoices] = await Promise.all([
+      paymentsRequest,
+      invoiceRequest,
+    ]);
+    const paymentsByStay = new Map<string, HotelPayment[]>();
+    for (const payment of payments) {
+      const stay = byId.get(payment.hotel_stay_id);
+      if (
+        !stay ||
+        !parentByStay.has(stay.id) ||
+        payment.workspace_id !== workspaceId ||
+        payment.project_id !== stay.project_id
+      )
+        throw new ReadError("CONTRACT");
+      const own = paymentsByStay.get(stay.id) ?? [];
+      own.push(payment);
+      paymentsByStay.set(stay.id, own);
+    }
+    const invoiceByEntry = new Map<
+      string,
+      ReturnType<typeof projectHotelInvoice>
+    >();
+    for (const invoice of invoices) {
+      if (
+        typeof invoice.id !== "string" ||
+        !entryIds.includes(invoice.id) ||
+        invoiceByEntry.has(invoice.id)
+      )
+        throw new ReadError("CONTRACT");
+      invoiceByEntry.set(invoice.id, projectHotelInvoice(invoice));
+    }
+    return stays.map((stay) => ({
+      stayId: stay.id,
+      finance: parentByStay.has(stay.id)
+        ? {
+            commitment: parentByStay.get(stay.id)!,
+            payments: paymentsByStay.get(stay.id) ?? [],
+            invoice: stay.roadbook_entry_id
+              ? (invoiceByEntry.get(stay.roadbook_entry_id) ??
+                projectHotelInvoice(null))
+              : projectHotelInvoice(null),
+          }
+        : empty(),
+    }));
+  });
 }

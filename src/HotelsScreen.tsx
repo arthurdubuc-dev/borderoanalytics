@@ -10,11 +10,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useResource } from "./useResource";
-import { loadHotelStays, loadHotelFinance, loadHotelRooming } from "./hotelApi";
+import {
+  loadHotelStays,
+  loadHotelFinance,
+  loadHotelRooming,
+  loadHotelFinanceBatch,
+  HOTEL_FINANCE_BATCH_SIZE,
+} from "./hotelApi";
 import {
   receptionPayment,
   stayPosition,
   groupRooms,
+  hotelBalanceStatus,
   type HotelStay,
 } from "./hotels";
 import { dayLabel, exact, parisDay, type Project } from "./domain";
@@ -58,6 +65,7 @@ export function HotelsScreen({
   const [selected, setSelected] = useState<HotelStay | null>(null);
   const [period, setPeriod] = useState<"near" | "all">("near");
   const [limit, setLimit] = useState(30);
+  const [financeEpoch, setFinanceEpoch] = useState(0);
   const from = period === "near" ? day : dayShift(day, -90),
     to = dayShift(day, 180);
   const data = useResource(`hotels:${workspaceId}:${from}:${to}`, (s) =>
@@ -173,85 +181,31 @@ export function HotelsScreen({
           detail="Essaie un autre nom ou inclus les séjours récents."
         />
       ) : (
-        hotels.slice(0, limit).map((stay) => {
-          const position = stayPosition(stay, day),
-            label = {
-              current: "Sur place",
-              departure: "Départ aujourd’hui",
-              upcoming: "À venir",
-              past: "Séjour passé",
-            }[position];
-          return (
-            <Pressable
-              key={stay.id}
-              accessibilityRole="button"
-              accessibilityLabel={`${stay.hotel?.name ?? "Hôtel"}, ${label}, ouvrir la fiche réception`}
-              onPress={() => setSelected(stay)}
-            >
-              <Card>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: 12,
-                    alignItems: "center",
-                  }}
-                >
-                  <View
-                    style={{
-                      padding: 12,
-                      borderRadius: 16,
-                      backgroundColor: c.secondary,
-                    }}
-                  >
-                    <Icon name="bed-outline" />
-                  </View>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Txt
-                      style={{
-                        fontSize: 18,
-                        lineHeight: 24,
-                        fontWeight: "700",
-                      }}
-                    >
-                      {stay.hotel?.name ?? "Hôtel non renseigné"}
-                    </Txt>
-                    <Txt muted style={{ fontSize: 12 }}>
-                      {[stay.hotel?.city, projectNames.get(stay.project_id)]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </Txt>
-                  </View>
-                  <Icon name="chevron-forward" size={18} />
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <Txt
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: position === "current" ? "#178478" : c.muted,
-                    }}
-                  >
-                    {label}
-                  </Txt>
-                  <Txt muted style={{ fontSize: 12 }}>
-                    {dayLabel(stay.check_in_date)} →{" "}
-                    {dayLabel(stay.check_out_date)}
-                  </Txt>
-                </View>
-                <Txt muted style={{ fontSize: 12 }}>
-                  Échéancier, acomptes et rooming list
-                </Txt>
-              </Card>
-            </Pressable>
-          );
-        })
+        Array.from(
+          {
+            length: Math.ceil(
+              Math.min(hotels.length, limit) / HOTEL_FINANCE_BATCH_SIZE,
+            ),
+          },
+          (_, index) => {
+            const stays = hotels.slice(
+              index * HOTEL_FINANCE_BATCH_SIZE,
+              Math.min((index + 1) * HOTEL_FINANCE_BATCH_SIZE, limit),
+            );
+            return (
+              <HotelCardsBatch
+                key={stays.map((s) => s.id).join(":")}
+                stays={stays}
+                day={day}
+                projectNames={projectNames}
+                readVersion={`${data.updatedAt ?? 0}:${financeEpoch}`}
+                rechecking={data.loading}
+                unavailable={!!data.error}
+                onSelect={setSelected}
+              />
+            );
+          },
+        )
       )}
       {hotels.length > limit && (
         <Button
@@ -266,7 +220,229 @@ export function HotelsScreen({
           stay={selected}
           project={projectNames.get(selected.project_id) ?? "Projet"}
           day={day}
-          close={() => setSelected(null)}
+          close={() => {
+            setSelected(null);
+            setFinanceEpoch((v) => v + 1);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function HotelListBalance({
+  summary,
+  loading,
+  failed,
+}: {
+  summary: ReturnType<typeof receptionPayment> | null;
+  loading: boolean;
+  failed: boolean;
+}) {
+  const c = useTheme();
+  const state = hotelBalanceStatus(failed ? null : summary);
+  const color =
+    state.status === "paid"
+      ? c.bg === "#0B0D10"
+        ? "#4DD3A0"
+        : "#067647"
+      : state.status === "due"
+        ? c.danger
+        : c.muted;
+  return (
+    <View
+      style={{
+        gap: 4,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: c.line,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            borderRadius: 10,
+            paddingHorizontal: 9,
+            paddingVertical: 5,
+            backgroundColor: color + "16",
+          }}
+        >
+          <Icon
+            name={
+              state.status === "paid"
+                ? "checkmark-circle-outline"
+                : state.status === "due"
+                  ? "alert-circle-outline"
+                  : "help-circle-outline"
+            }
+            size={16}
+            color={color}
+          />
+          <Txt style={{ fontSize: 13, fontWeight: "700", color }}>
+            {loading ? "Vérification…" : state.label}
+          </Txt>
+        </View>
+        {!loading && state.remaining !== null && (
+          <Txt
+            style={{ fontSize: 21, lineHeight: 28, fontWeight: "700", color }}
+          >
+            {exact(state.remaining, true)}
+          </Txt>
+        )}
+      </View>
+      <Txt muted style={{ fontSize: 11 }}>
+        {loading
+          ? "Chargement du reste à régler"
+          : state.remaining === null
+            ? "Solde non confirmé · ouvre la fiche pour vérifier"
+            : state.basis === "schedule"
+              ? "Reste à régler selon l’échéancier"
+              : "Reste à régler sur la facture enregistrée"}
+      </Txt>
+    </View>
+  );
+}
+export function HotelCardsBatch({
+  stays,
+  day,
+  projectNames,
+  readVersion,
+  rechecking,
+  unavailable = false,
+  onSelect,
+}: {
+  stays: HotelStay[];
+  day: string;
+  projectNames: Map<string, string>;
+  readVersion: string;
+  rechecking: boolean;
+  unavailable?: boolean;
+  onSelect: (stay: HotelStay) => void;
+}) {
+  const c = useTheme();
+  const key = `hotel-list-finance:${stays[0]!.workspace_id}:${[...stays]
+    .map((s) => s.id)
+    .sort()
+    .join(",")}:${readVersion}`;
+  const finance = useResource(key, (signal) =>
+    loadHotelFinanceBatch(stays, signal),
+  );
+  const busy = finance.loading || rechecking;
+  const summaries = new Map(
+    (finance.data ?? []).map((row) => [
+      row.stayId,
+      receptionPayment(
+        row.finance.payments,
+        row.finance.commitment,
+        day,
+        row.finance.invoice.total,
+      ),
+    ]),
+  );
+  return (
+    <>
+      {stays.map((stay) => {
+        const position = stayPosition(stay, day),
+          label = {
+            current: "Sur place",
+            departure: "Départ aujourd’hui",
+            upcoming: "À venir",
+            past: "Séjour passé",
+          }[position];
+        const balance = hotelBalanceStatus(
+          !busy && !finance.error && !unavailable
+            ? (summaries.get(stay.id) ?? null)
+            : null,
+        );
+        return (
+          <Pressable
+            key={stay.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${stay.hotel?.name ?? "Hôtel"}, ${label}, ${busy ? "Vérification du solde" : balance.label}${balance.remaining !== null ? ", reste à régler " + exact(balance.remaining, true) : ""}, ouvrir la fiche réception`}
+            onPress={() => onSelect(stay)}
+          >
+            <Card>
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 12,
+                  alignItems: "center",
+                }}
+              >
+                <View
+                  style={{
+                    padding: 12,
+                    borderRadius: 16,
+                    backgroundColor: c.secondary,
+                  }}
+                >
+                  <Icon name="bed-outline" />
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Txt
+                    style={{
+                      fontSize: 18,
+                      lineHeight: 24,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {stay.hotel?.name ?? "Hôtel non renseigné"}
+                  </Txt>
+                  <Txt muted style={{ fontSize: 12 }}>
+                    {[stay.hotel?.city, projectNames.get(stay.project_id)]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </Txt>
+                </View>
+                <Icon name="chevron-forward" size={18} />
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Txt
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "700",
+                    color: position === "current" ? "#178478" : c.muted,
+                  }}
+                >
+                  {label}
+                </Txt>
+                <Txt muted style={{ fontSize: 12 }}>
+                  {dayLabel(stay.check_in_date)} →{" "}
+                  {dayLabel(stay.check_out_date)}
+                </Txt>
+              </View>
+              <HotelListBalance
+                summary={busy ? null : (summaries.get(stay.id) ?? null)}
+                loading={busy}
+                failed={!!finance.error || unavailable}
+              />
+            </Card>
+          </Pressable>
+        );
+      })}
+      {!!finance.error && (
+        <Button
+          secondary
+          title="Réessayer les soldes"
+          onPress={finance.retry}
         />
       )}
     </>

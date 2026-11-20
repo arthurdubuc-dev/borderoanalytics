@@ -50,3 +50,9 @@ TypeScript et 84 tests réussis. Rendu de la fiche réception vérifié dans un 
 Après le test iPhone, l’utilisateur a confirmé l’affichage des montants et de la rooming list. Le résumé a ensuite été clarifié à sa demande : total facture, déjà réglé et reste regroupés, couleurs noir/vert/rouge, montants exacts et suppression du doublon. Détail replié pour les prix chambres, PDJ, prestations et taxes. Les calculs et le total enregistré proviennent du Web ; les situations incomplètes restent signalées. 84 tests réussis. La vérification positive des nouveaux postes détaillés avec le compte de l’utilisateur reste à poursuivre après mise à jour.
 
 Les trois compilations Release finales (iPhone, simulateur et Android) sont réussies. Le rendu natif des trois montants et du Détail a été vérifié sur des données fictives. Version conservée : 1.0.0, Build 1. Aucun fichier de démonstration n’est inclus dans l’application réelle ni dans Git.
+
+## Soldes sur les cartes hôtel
+
+La liste affiche directement le reste en euros exacts : Réglé en vert, À régler en rouge, À confirmer si les données ne permettent pas la confirmation. Les lectures sont groupées par 20 séjours, avec deux groupes simultanés et sans chargement des détails tarifaires. Après un rafraîchissement ou la fermeture d’une fiche, les statuts sont revérifiés. TypeScript et 91 tests réussis. Aucun changement Supabase.
+
+Les trois compilations finales Release (iPhone, simulateur et Android) sont réussies pour les soldes sur les cartes. L’aperçu natif montre les trois cas Réglé, À régler et À confirmer sur des données fictives. Installation sur l’iPhone ArtDBC réalisée ; version maintenue à 1.0.0 Build 1. La lecture des nouveaux soldes groupés avec le compte de l’utilisateur reste à confirmer sur appareil.

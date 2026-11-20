@@ -181,3 +181,28 @@ export function groupRooms(guests: readonly RoomingGuest[]) {
   }
   return [...map.values()];
 }
+
+export function hotelBalanceStatus(
+  summary: ReturnType<typeof receptionPayment> | null,
+) {
+  if (
+    !summary?.reliable ||
+    !summary.hasBalance ||
+    summary.remaining === null ||
+    (summary.remaining === 0 && !summary.totalIsInvoice)
+  )
+    return {
+      status: "unknown" as const,
+      label: "À confirmer",
+      remaining: null,
+      basis: null,
+    };
+  return {
+    status: summary.remaining === 0 ? ("paid" as const) : ("due" as const),
+    label: summary.remaining === 0 ? "Réglé" : "À régler",
+    remaining: summary.remaining,
+    basis: summary.totalIsInvoice
+      ? ("invoice" as const)
+      : ("schedule" as const),
+  };
+}

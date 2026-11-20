@@ -46,3 +46,13 @@ Le reste utilise le calcul Web `summarizeHotelPlan` lorsque le total facture est
 L’accordéon « Détail », fermé par défaut, rassemble chambres et prix unitaires TTC, petits-déjeuners, autres repas/prestations renseignés, taxe de séjour, TVA comprise et total des taxes comprises. La TVA n’est pas ajoutée aux postes TTC. Les calculs reprennent `invoiceCalc.ts` du Web, généré sans modification ; le détail est présenté uniquement s’il se rapproche du total facture enregistré au centime. Sinon, les prix manquants ou la divergence restent explicites. L’échéancier détaillé est également rangé dans Détail.
 
 84 tests et TypeScript réussis. Le nouvel accès anonyme à la vue financière est refusé ; le rôle authentifié possède SELECT, toujours soumis aux RLS sous-jacentes. Aucun changement de données, de schéma ou de droits n’a été effectué.
+
+## Soldes dans la liste
+
+Chaque carte présente le reste exact à régler et un statut : Réglé en vert, À régler en rouge, À confirmer lorsque la lecture est impossible ou non certifiée. Le statut Réglé exige un total facture accessible et des règlements réconciliés ; un échéancier apparemment soldé sans total facture ne suffit pas.
+
+Les cartes sont lues par groupes de 20 séjours, avec deux groupes maximum en parallèle. Les engagements, échéances et seuls totaux facture nécessaires sont groupés ; les prix détaillés et la rooming list ne sont pas chargés pour la liste. Toutes les lectures gardent les filtres d’espace et de projets, les identités demandées et les RLS du compte connecté. Des lignes incohérentes ou hors périmètre font échouer la lecture, sans produire de statut vert.
+
+Le rafraîchissement de la liste, le retour au premier plan et la fermeture d’une fiche réception relancent la vérification. Pendant une actualisation, l’ancien statut n’est pas affiché comme confirmé. Une erreur conserve l’accès à la fiche et affiche À confirmer, avec la possibilité de relancer les soldes.
+
+TypeScript et 91 tests réussis, dont sept nouveaux tests des lectures groupées, des frontières de projets/espaces, des sources masquées et des cas Réglé/À régler/À confirmer. Aucun changement serveur, de droits ou de données métier.
