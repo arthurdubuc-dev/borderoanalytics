@@ -1,6 +1,6 @@
 import { HotelPaymentControls } from "./HotelPaymentControls";
 import { HotelInvoiceDetails } from "./HotelInvoiceDetails";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   AppState,
   Linking,
@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useResource } from "./useResource";
+import { ReadContext, useResource } from "./useResource";
 import {
   loadHotelStays,
   loadHotelFinance,
@@ -67,11 +67,22 @@ export function HotelsScreen({
   const [period, setPeriod] = useState<"near" | "all">("near");
   const [limit, setLimit] = useState(30);
   const [financeEpoch, setFinanceEpoch] = useState(0);
+  const reads = useContext(ReadContext);
+  function paymentConfirmed() {
+    // Invalidate only this workspace, including keys reused when the tab remounts.
+    reads?.cache.invalidate((key) =>
+      ["hotel-finance", "hotel-list-finance", "hotel-settlements"].some(
+        (kind) => key.startsWith(`${reads.revision}:${kind}:${workspaceId}:`),
+      ),
+    );
+    setFinanceEpoch((v) => v + 1);
+  }
   const from = period === "near" ? day : dayShift(day, -90),
     to = dayShift(day, 180);
   const data = useResource(`hotels:${workspaceId}:${from}:${to}`, (s) =>
     loadHotelStays(workspaceId, from, to, s),
   );
+  const financeVersion = `${data.updatedAt ?? 0}:${financeEpoch}`;
   useEffect(() => {
     const timer = setInterval(() => setDay(parisDay()), 60000);
     const sub = AppState.addEventListener("change", (state) => {
@@ -199,7 +210,7 @@ export function HotelsScreen({
                 stays={stays}
                 day={day}
                 projectNames={projectNames}
-                readVersion={`${data.updatedAt ?? 0}:${financeEpoch}`}
+                readVersion={financeVersion}
                 rechecking={data.loading}
                 unavailable={!!data.error}
                 onSelect={setSelected}
@@ -221,10 +232,9 @@ export function HotelsScreen({
           stay={selected}
           project={projectNames.get(selected.project_id) ?? "Projet"}
           day={day}
-          close={() => {
-            setSelected(null);
-            setFinanceEpoch((v) => v + 1);
-          }}
+          financeVersion={financeVersion}
+          onPaymentConfirmed={paymentConfirmed}
+          close={() => setSelected(null)}
         />
       )}
     </>
@@ -453,21 +463,23 @@ export function HotelReception({
   stay,
   project,
   day,
+  financeVersion,
+  onPaymentConfirmed,
   close,
 }: {
   stay: HotelStay;
   project: string;
   day: string;
+  financeVersion: string;
+  onPaymentConfirmed: () => void;
   close: () => void;
 }) {
   const c = useTheme();
   const [showRooms, setShowRooms] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
-  const finance = useResource(
-    `hotel-finance:${stay.workspace_id}:${stay.project_id}:${stay.id}`,
-    (s) => loadHotelFinance(stay, s),
-  );
+  const financeReadKey = `hotel-finance:${stay.workspace_id}:${stay.project_id}:${stay.id}:${financeVersion}`;
+  const finance = useResource(financeReadKey, (s) => loadHotelFinance(stay, s));
   const rooming = useResource(
     showRooms ? `hotel-rooming:${stay.workspace_id}:${stay.id}` : null,
     (s) => loadHotelRooming(stay, s),
@@ -725,7 +737,8 @@ export function HotelReception({
             finance={finance.data}
             loading={finance.loading}
             error={finance.error}
-            onChanged={finance.retry}
+            readVersion={financeReadKey}
+            onChanged={onPaymentConfirmed}
             onBusyChange={setPaymentBusy}
           />
           <Card>

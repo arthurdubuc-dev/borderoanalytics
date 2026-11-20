@@ -69,10 +69,18 @@ Chaque tentative possède un UUID sécurisé et conserve exactement sa charge av
 
 Exception ciblée au cache de lecture en mémoire : la seule tentative non confirmée est conservée dans le trousseau chiffré de l’appareil, accessible uniquement déverrouillé, liée au compte, espace, projet et séjour. Elle contient la clé de reprise, les identités nécessaires et les champs saisis, sans jeton d’accès ni données de voyageurs. Elle est supprimée après confirmation. Une reprise après fermeture de l’app utilise la même opération, sans duplication. Les historiques et rooming lists ne sont pas enregistrés sur disque par ce mécanisme.
 
-Après confirmation serveur, les totaux sont relus et les soldes des cartes sont revérifiés à la fermeture de la fiche. Une erreur de relecture ne nie pas un paiement confirmé ; les actions restent bloquées jusqu’à l’actualisation des données. Les refus de droits et changements de compte restent bloquants.
+Après confirmation serveur, les totaux de la fiche et les soldes des cartes sont relus immédiatement, sans attendre la fermeture de la fiche. Une erreur de relecture ne nie pas un paiement confirmé ; les actions restent bloquées jusqu’à l’actualisation des données. Les refus de droits et changements de compte restent bloquants.
 
 TypeScript et 112 tests réussis : protocoles, correction ciblée, montants/dates français, plafonds, permissions Web, double clic, concurrence entre formulaires, pertes de réponse et reprise après redémarrage simulé. Les tests utilisent des données synthétiques et des doubles de transport. Aucun règlement réel de production n’a été créé ou corrigé pour les tests.
 
 La date réelle se choisit désormais dans le calendrier natif : toucher la date ouvre le calendrier iOS ; Android présente un calendrier avec Choisir/Annuler. Les jours futurs sont exclus, en cohérence avec la règle serveur Europe/Paris. Trois tests couvrent la valeur initiale, les limites de jour et les changements d’heure. Le montant et le moyen de paiement restent inchangés lors du choix de la date.
 
 L’utilisateur a confirmé avoir enregistré avec succès un solde avec sa date avant cette évolution du sélecteur. Aucun règlement fictif n’a été envoyé en production par l’agent.
+
+## Mise à jour automatique après règlement
+
+La confirmation d’un enregistrement ou d’une correction invalide les lectures financières hôtel de l’espace courant et lance une nouvelle lecture de la fiche, des cartes visibles et des règlements. Les ventes, roomings et caches des autres espaces sont conservés. Une réponse commencée avant le paiement ne peut pas rétablir un ancien solde. Fermer/réouvrir le séjour ou changer d’onglet ne réutilise pas les anciens montants.
+
+Les actions sont réactivées dès réception du nouvel état, même si la lecture est trop rapide pour afficher une étape de chargement intermédiaire. Pendant une lecture lente, l’app affiche la vérification plutôt qu’un ancien chiffre ; en cas de refus, elle ne transforme pas un état inconnu en « Réglé ». Aucun total financier n’est recalculé de façon optimiste dans l’interface.
+
+121 tests et TypeScript réussis, dont neuf tests avec les vrais composants React, leur cache et leurs callbacks, et des services simulés : enregistrement, corrections à la hausse/à la baisse/sans changement de montant, fiche et liste avant fermeture, réouverture, remontage d’onglet, réponse ancienne retardée, lecture lente, refus de lecture, réponse de paiement incertaine et isolation des caches. Aucun règlement réel n’a été créé pour ces vérifications.

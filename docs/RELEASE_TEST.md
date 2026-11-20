@@ -68,3 +68,11 @@ Le champ de date a ensuite été remplacé par un calendrier natif, ouvert au to
 Le rendu du nouveau champ calendrier a été observé dans le formulaire natif de correction, avec données fictives. Les compilations iPhone physique et Android ont réussi ; la Release 1.0.0 Build 1 a été installée sur ArtDBC. L’ouverture tactile du calendrier et le choix d’une nouvelle date avec le compte réel restent à confirmer par l’utilisateur.
 
 La compilation Release du simulateur a également réussi. L’aperçu isolé a été retiré du simulateur et remplacé par l’application réelle. Les trois fichiers Release locaux ont été actualisés.
+
+## Actualisation immédiate des soldes après paiement
+
+Correction du décalage confirmé dans le code : la liste attendait auparavant la fermeture du séjour. Dès la confirmation serveur d’un enregistrement ou d’une correction, la fiche et les cartes hôtels relisent leurs montants, avec invalidation ciblée des anciens caches. Les règlements sont également relus, même si les montants restent identiques. Aucun changement de calcul financier, de serveur, de schéma ou de droits.
+
+TypeScript et 121 tests réussis, dont neuf nouveaux scénarios de composants React avec services simulés. La fiche et la liste sont vérifiées avant fermeture, après réouverture et après remontage de l’onglet. Cas supplémentaires : réponse ancienne retardée, réseau lent, refus de lecture et réponse de paiement incertaine. Aucun règlement de production n’a été saisi ou corrigé par l’agent pour ces tests ; la validation réelle des nouveaux rafraîchissements avec le compte utilisateur reste distincte.
+
+Les compilations Release iPhone, simulateur et Android ont réussi. La Release 1.0.0 Build 1 a été installée sur ArtDBC ; les fichiers Release locaux ont été actualisés. La compilation Android a nécessité le nettoyage des fichiers générés du module Expo, qui contenaient une classe dupliquée ; aucune source native n’a été modifiée.

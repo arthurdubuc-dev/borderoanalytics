@@ -146,6 +146,14 @@ export class ReadCache {
       }
     }
   }
+  /** Discard only matching reads; late pre-mutation responses cannot refill them. */
+  invalidate(matches: (key: string) => boolean) {
+    for (const [key, entry] of this.entries) {
+      if (!matches(key)) continue;
+      entry.controller?.abort();
+      this.entries.delete(key);
+    }
+  }
   clear() {
     for (const entry of this.entries.values()) entry.controller?.abort();
     this.entries.clear();

@@ -48,6 +48,7 @@ export function HotelPaymentControls({
   finance,
   loading,
   error,
+  readVersion,
   onChanged,
   onBusyChange,
 }: {
@@ -55,6 +56,7 @@ export function HotelPaymentControls({
   finance: HotelFinanceSnapshot | undefined;
   loading: boolean;
   error: unknown;
+  readVersion: string;
   onChanged: () => void;
   onBusyChange: (busy: boolean) => void;
 }) {
@@ -67,7 +69,7 @@ export function HotelPaymentControls({
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const sawRead = useRef(false);
+  const syncingFrom = useRef<string | null>(null);
   const alive = useRef(true);
   const controller = useRef(new AbortController());
   const inFlight = useRef(false);
@@ -124,7 +126,9 @@ export function HotelPaymentControls({
           ":" +
           stay.id +
           ":" +
-          sourceSignature
+          sourceSignature +
+          ":" +
+          readVersion
       : null,
     (s) => loadHotelSettlements(stay, finance!, s),
   );
@@ -133,12 +137,12 @@ export function HotelPaymentControls({
   }, [busy, onBusyChange]);
   useEffect(() => {
     if (!syncing) return;
-    if (loading) sawRead.current = true;
-    else if (sawRead.current && !error) {
+    // A fast cached/network read may complete before React renders loading=true.
+    if (readVersion !== syncingFrom.current && finance && !loading && !error) {
       setSyncing(false);
-      sawRead.current = false;
+      syncingFrom.current = null;
     }
-  }, [loading, error, syncing]);
+  }, [readVersion, finance, loading, error, syncing]);
   const disabled =
     busy ||
     syncing ||
@@ -239,7 +243,7 @@ export function HotelPaymentControls({
               ". Actualisation des montants…",
       );
       setSyncing(true);
-      sawRead.current = false;
+      syncingFrom.current = readVersion;
       pendingRead.retry();
       ledger.retry();
       onChanged();
